@@ -8,4 +8,8 @@ header:
     title: Tasks
   - url: /about
     title: About
+
+footer:
+  - url: /contact
+    title: contact us
 ---

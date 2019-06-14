@@ -1,9 +1,12 @@
 # Site settings
 title: "#mS: "
-email: "me@geodavey.us"
 description: "#mapSwazi"
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "https://1papaya.github.io/mapSwazi" # the base hostname & protocol for your site
+
+contact:
+  email: "mapSwazi@gmail.com"
+  whatsapp: "https://bit.ly/2F9sd2P"
 
 color: "purple"
 collections_dir: "collections"
