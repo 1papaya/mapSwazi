@@ -1,0 +1,47 @@
+# Site settings
+title: "#mS: "
+email: "me@geodavey.us"
+description: "#mapSwazi"
+baseurl: "" # the subpath of your site, e.g. /blog
+url: "https://1papaya.github.io/mapSwazi" # the base hostname & protocol for your site
+
+color: "purple"
+collections_dir: "collections"
+
+permalink: pretty
+
+exclude:
+  - .cache
+  - assets/js
+
+plugins:
+  - jekyll-menus
+
+collections:
+  supporters:
+    output: false
+  news:
+    output: true
+
+# defaults
+defaults:
+  -
+    scope:
+      path: ""
+      type: "supporters"
+    values:
+      layout: "default"
+  -
+    scope:
+      path: ""
+      type: "news"
+    values:
+      layout: "default"
+
+# Build settings
+Markdown: kramdown
+
+# SASS settings
+sass:
+  sass_dir: assets/css
+  style: compressed

@@ -1,0 +1,11 @@
+{% for post in include.posts %}
+<div class="dateline columns is-vcentered is-flex is-gapless">
+    <div class="column is-2 is-2-mobile has-text-right is-size-7 date">
+        <div class="">{{ post.date | date: "%d %b" }}</div>
+        <div class="">{{ post.date | date: "%Y" }}</div>
+    </div>
+    <div class="column is-size-5 is-size-6-mobile link">
+        <a href="{{ post.url }}">{{ post.title }}</a>
+    </div>
+</div>
+{% endfor %}

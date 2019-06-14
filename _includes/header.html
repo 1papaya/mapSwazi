@@ -1,0 +1,27 @@
+<header class="container">
+    <nav class="navbar" role="navigation" aria-label="main navigation">
+        <div class="navbar-brand">
+            <a class="navbar-item" href="{{ site.url }}">
+                <img src="/assets/img/flagmap40.png" height="30">
+                <span class="is-size-5">&nbsp;#mapSwazi</span>
+            </a>
+
+            <a role="button" class="navbar-burger burger" aria-label="menu" aria-expanded="false" data-target="navbar">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </a>
+        </div>
+
+        <div id="navbar" class="navbar-menu">
+            <div class="navbar-end">
+                {% for item in site.menus.header %}
+                <a class="navbar-item" href="{{ item.url }}">
+                    {{ item.title }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+
+    </nav>
+</header>

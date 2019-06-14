@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+    <!-- viva la #mapSwazi!!! simunye umdeni!!! <3 -->
+
+    {% include head.html %}
+
+    <body{% if page.slug %} class="{{ page.slug }}"{% endif %}>
+
+    {% include header.html %}
+
+    {{ content }}
+
+    {% include footer.html %}
+  </body>
+
+</html>

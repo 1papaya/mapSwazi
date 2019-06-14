@@ -1,0 +1,82 @@
+---
+title: home
+slug: home
+layout: default
+permalink: /
+---
+
+<section class="hero container is-medium is-dark has-background has-text-centered">
+    <img class="hero-background is-transparent" src="/assets/img/ndlembeni-data-sat.jpg">
+    <div class="hero-body">
+        <div class="container">
+            <h1 class="title">
+                putting eSwatini on the map
+            </h1>
+            <h2 class="subtitle">
+                mapping for development #vision2022
+            </h2>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <div class="columns">
+            <div class="column is-one-third">
+                <div class="title is-size-5 has-text-centered">
+                    what is #mapSwazi?
+                </div>
+                <div class="content has-text-justified">
+                    #mapSwazi is an initiative to improve map quality in the Kingdom of eSwatini, using the <a href="http://openstreetmap.org">OpenStreetMap</a> platform. It aims to (a) organize the contribution of eSwatini map data, and (b) to build a community of volunteer mappers.
+                </div>
+            </div>
+            <div class="column is-one-third">
+                <div class="title is-size-5 has-text-centered">
+                    why do we map?
+                </div>
+                <div class="content has-text-justified">
+                    <ul>
+                        <li>to promote development</li>
+                        <li>to improve navigation</li>
+                        <li>because it's fun & cool!</li>
+                        <li>read more our <a href="/about">about page</a>!</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="column is-one-third">
+                <div class="title is-size-5 has-text-centered">
+                    how you can help
+                </div>
+                <div class="content has-text-justified">
+                    Check out the <a href="/instructions">instructions</a> page on how to contribute, and then start mapping some of the <a href="/tasks">active tasks</a>! Join our <a href="/whatsapp">whatsapp group</a> to be in touch with the #mapSwazi community.
+                </div>
+            </div>
+        </div>
+        <div class="columns">
+            <div class="column is-two-thirds">
+                <div class="content">
+                    <div class="hrheading">
+                        <a href="/news">
+                            recent news
+                        </a>
+                    </div>
+
+                    {% assign news = site.news | sorted: date | reverse %}
+                    {% include news.html posts=news %}
+                </div>
+            </div>
+            <div class="column">
+                <div class="content">
+                    <div class="hrheading">
+                        <a href="/statistics">
+                            statistics
+                        </a>
+                    </div>
+                    <div class="title is-5 has-text-centered">
+                        coming soon!
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

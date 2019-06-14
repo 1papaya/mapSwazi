@@ -1,0 +1,214 @@
+---
+---
+@charset "utf-8";
+
+//
+// Bulma
+//
+
+@import "../../node_modules/bulma/sass/utilities/_all.sass";
+
+$column-gap: 0.375em;
+$block-spacing: 1rem;
+$section-padding: 1rem 0;
+$navbar-breakpoint: $tablet;
+$dimensions: 256;
+
+@import "../../node_modules/bulma/sass/base/_all.sass";
+@import "../../node_modules/bulma/sass/grid/_all.sass";
+@import "../../node_modules/bulma/sass/layout/_all.sass";
+@import "../../node_modules/bulma/sass/elements/container.sass";
+@import "../../node_modules/bulma/sass/components/navbar.sass";
+@import "../../node_modules/bulma/sass/elements/title.sass";
+@import "../../node_modules/bulma/sass/elements/content.sass";
+@import "../../node_modules/bulma/sass/elements/button.sass";
+@import "../../node_modules/bulma/sass/elements/image.sass";
+
+@import "../../node_modules/plyr/src/sass/plyr.scss";
+
+//
+// Leaflet
+//
+
+@import "./leaflet.scss";
+
+
+//
+// Fonts
+//
+
+@font-face {
+    font-family: 'Titillium';
+    font-style: normal;
+    font-weight: 400;
+    src: local('Titillium Web Regular'), local('TitilliumWeb-Regular'), url(/assets/fonts/titillium-web.woff2) format('woff2');
+}
+
+//
+// Global
+//
+
+$site-width: 768px;
+
+body {
+    font-family: 'Titillium';
+    font-size: 10pt;
+    color: #000;
+    background-color: #fff;
+}
+
+hr {
+    margin: $section-padding !important;
+}
+
+.ma {
+    padding: 0.5em;
+    margin: 0 auto;
+}
+
+@media screen and (max-width: $tablet) {
+    .reverse-mobile {
+        display: flex;
+        flex-direction: column-reverse;
+    }
+}
+
+.content {
+    padding: 0 0.5rem;
+
+    & ul {
+        margin-bottom: 1em;
+    }
+}
+.container {
+    max-width: $site-width !important;
+}
+
+// thanks to https://codepen.io/leonidboykov/pen/Edvvpm
+
+.hero {
+    &.has-background {
+        position: relative;
+        overflow: hidden;
+
+        text-shadow: 2px 2px #000;
+
+        & .hero-background {
+            position: absolute;
+            object-fit: cover;
+            object-position: center center;
+            width: 100%;
+            height: 100%;
+
+            &.is-transparent {
+                opacity: 0.9;
+            }
+        }
+    }
+}
+
+.dateline {
+    margin-bottom: 0.375em !important;
+
+    $line-size: 70%;
+
+    .date {
+        position: relative;
+
+        &:after {
+            position: absolute;
+            display: block;
+            content: " ";
+            right: 0;
+            top: (100% - $line-size)/2;
+            height: $line-size;
+            width: 1px;
+            background-color: #000;
+        }
+
+        & div {
+            line-height: 1em;
+            padding-right: 0.5em;
+        }
+    }
+
+    .link {
+        margin-left: 0.5em !important;
+        line-height: 1em;
+    }
+}
+
+.hrheading {
+
+    overflow: hidden;
+    margin-bottom: 0.2em;
+
+    &>a, &>span {
+        font-size: $size-5;
+        font-weight: bold;
+        color: $grey-darker;
+        margin-left: 1em;
+        position: relative;
+        display: inline-block;
+
+        &:after, &:before {
+            content: ' ';
+            position: absolute;
+            top: 50%;
+            border-bottom: 1px solid #ccc;
+            width: $site-width;
+            margin: 0 10px;
+        }
+
+        &:after {
+            left: 100%;
+        }
+
+        &:before {
+            right: 100%;
+        }
+
+        & img {
+            vertical-align: middle;
+            display: inline-block;
+            margin-top: -3px;
+            height: 24px;
+            width: 24px;
+        }
+    }
+
+    &.centered {
+        margin: 0 auto;
+        &>a, &>span {
+            margin: 0 auto;
+        }
+    }
+
+
+}
+
+.succinct-nav {
+    margin: 0 !important;
+        &>li {
+            display: inline-block;
+
+            &:before {
+                content: "·";
+                margin: 0 2px 0 4px;
+
+            }
+        }
+}
+
+footer {
+    border-top: 2px solid #dfdfdf;
+    padding-top: 0.5rem;
+}
+
+//
+// Leaflet
+//
+
+#tasks-map {
+    height: 510px;
+}
