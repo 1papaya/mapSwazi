@@ -15,7 +15,7 @@ permalink: pretty
 
 exclude:
   - .cache
-  - assets/js
+  - node_modules
 
 plugins:
   - jekyll-menus

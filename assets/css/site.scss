@@ -24,7 +24,7 @@ $dimensions: 256;
 @import "../../node_modules/bulma/sass/elements/button.sass";
 @import "../../node_modules/bulma/sass/elements/image.sass";
 
-@import "../../node_modules/plyr/src/sass/plyr.scss";
+//@import "../../node_modules/plyr/src/sass/plyr.scss";
 
 //
 // Leaflet
@@ -41,7 +41,7 @@ $dimensions: 256;
     font-family: 'Titillium';
     font-style: normal;
     font-weight: 400;
-    src: local('Titillium Web Regular'), local('TitilliumWeb-Regular'), url(/assets/fonts/titillium-web.woff2) format('woff2');
+    src: local('Titillium Web Regular'), local('TitilliumWeb-Regular'), url(/assets/titillium-web.woff2) format('woff2');
 }
 
 //
@@ -208,6 +208,6 @@ footer {
 // Leaflet
 //
 
-#tasks-map {
+#projects-map {
     height: 510px;
 }

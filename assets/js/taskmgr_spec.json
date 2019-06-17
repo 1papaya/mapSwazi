@@ -1,0 +1,3780 @@
+{
+  "definitions": {
+    "GeoJsonFeature": {
+      "properties": {
+        "geometry": {
+          "schema": {
+            "$ref": "#/definitions/GeoJsonMultiPolygon"
+          }
+        }, 
+        "properties": {
+          "properties": {
+            "isSquare": {
+              "default": true, 
+              "type": "boolean"
+            }, 
+            "x": {
+              "default": 2402, 
+              "type": "integer"
+            }, 
+            "y": {
+              "default": 1736, 
+              "type": "integer"
+            }, 
+            "zoom": {
+              "default": 12, 
+              "type": "integer"
+            }
+          }, 
+          "type": "object"
+        }, 
+        "type": {
+          "default": "Feature", 
+          "type": "string"
+        }
+      }
+    }, 
+    "GeoJsonMultiPolygon": {
+      "properties": {
+        "coordinates": {
+          "items": {
+            "default": [
+              [
+                [
+                  -4.0237, 
+                  56.0904
+                ], 
+                [
+                  -3.9111, 
+                  56.1715
+                ], 
+                [
+                  -3.8122, 
+                  56.098
+                ], 
+                [
+                  -4.0237, 
+                  56.0904
+                ]
+              ]
+            ], 
+            "type": "number"
+          }, 
+          "type": "array"
+        }, 
+        "type": {
+          "default": "MultiPolygon", 
+          "type": "string"
+        }
+      }
+    }, 
+    "GeoJsonPolygon": {
+      "properties": {
+        "coordinates": {
+          "items": {
+            "default": [
+              [
+                -4.0237, 
+                56.0904
+              ], 
+              [
+                -3.9111, 
+                56.1715
+              ], 
+              [
+                -3.8122, 
+                56.098
+              ], 
+              [
+                -4.0237, 
+                56.0904
+              ]
+            ], 
+            "type": "number"
+          }, 
+          "type": "array"
+        }, 
+        "type": {
+          "default": "Polygon", 
+          "type": "string"
+        }
+      }
+    }, 
+    "ProjectInfo": {
+      "properties": {
+        "description": {
+          "default": "Awesome little project and a little bit more", 
+          "type": "string"
+        }, 
+        "instructions": {
+          "default": "Complete the tasks", 
+          "type": "string"
+        }, 
+        "locale": {
+          "default": "en", 
+          "type": "string"
+        }, 
+        "name": {
+          "default": "Thinkwhere Project", 
+          "type": "string"
+        }, 
+        "perTaskInstructions": {
+          "default": "Use Thinkwhere Imagery Only", 
+          "type": "string"
+        }, 
+        "shortDescription": {
+          "default": "Awesome little project", 
+          "type": "string"
+        }
+      }
+    }, 
+    "ResetTask": {
+      "properties": {
+        "comment": {
+          "default": "Work in progress", 
+          "type": "string"
+        }, 
+        "taskId": {
+          "default": 1, 
+          "type": "integer"
+        }
+      }
+    }, 
+    "TaskComment": {
+      "properties": {
+        "comment": {
+          "description": "user comment about the task", 
+          "type": "string"
+        }
+      }, 
+      "required": [
+        "comment"
+      ]
+    }, 
+    "TaskUpdateStop": {
+      "properties": {
+        "comment": {
+          "default": "Comment about mapping done before stop", 
+          "description": "Optional user comment about the task", 
+          "type": "string"
+        }
+      }
+    }, 
+    "TaskUpdateUnlock": {
+      "properties": {
+        "comment": {
+          "default": "Comment about the mapping", 
+          "description": "Optional user comment about the task", 
+          "type": "string"
+        }, 
+        "status": {
+          "default": "MAPPED", 
+          "description": "The new status for the task", 
+          "type": "string"
+        }
+      }, 
+      "required": [
+        "status"
+      ]
+    }, 
+    "ValidatedTask": {
+      "properties": {
+        "comment": {
+          "default": "Nice work :)", 
+          "type": "string"
+        }, 
+        "status": {
+          "default": "VALIDATED", 
+          "type": "string"
+        }, 
+        "taskId": {
+          "default": 1, 
+          "type": "integer"
+        }
+      }
+    }
+  }, 
+  "info": {
+    "description": "API endpoints for the HOT tasking manager", 
+    "title": "HOT Tasking Manager API", 
+    "version": "0.0.1"
+  }, 
+  "paths": {
+    "/api/auth/email": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "thinkwhere", 
+            "in": "query", 
+            "name": "username", 
+            "type": "string"
+          }, 
+          {
+            "default": "1234dvsdf", 
+            "in": "query", 
+            "name": "token", 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "301": {
+            "description": "Will redirect to email validation page"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Authenticates user owns email address", 
+        "tags": [
+          "authentication"
+        ]
+      }
+    }, 
+    "/api/docs": {
+      "get": {
+        "description": "", 
+        "responses": {}, 
+        "summary": "Generates Swagger UI readable JSON", 
+        "tags": [
+          "docs"
+        ]
+      }
+    }, 
+    "/api/health-check": {
+      "get": {
+        "description": "", 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Service is Healthy"
+          }
+        }, 
+        "summary": "Simple health-check, if this is unreachable load balancers should be configures to raise an alert", 
+        "tags": [
+          "health-check"
+        ]
+      }
+    }, 
+    "/api/v1/admin/my-projects": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "All mapped tasks validated"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "404": {
+            "description": "Admin has no projects"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get all projects for logged in admin", 
+        "tags": [
+          "project-admin"
+        ]
+      }
+    }, 
+    "/api/v1/admin/project": {
+      "put": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "description": "JSON object for creating draft project", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "properties": {
+                "arbitraryTasks": {
+                  "default": false, 
+                  "type": "boolean"
+                }, 
+                "areaOfInterest": {
+                  "schema": {
+                    "properties": {
+                      "features": {
+                        "items": {
+                          "schema": {
+                            "$ref": "#/definitions/GeoJsonFeature"
+                          }
+                        }, 
+                        "type": "array"
+                      }, 
+                      "type": {
+                        "default": "FeatureCollection", 
+                        "type": "string"
+                      }
+                    }
+                  }
+                }, 
+                "cloneFromProjectId": {
+                  "default": 1, 
+                  "description": "Specify this value if you want to clone a project, otherwise leave out of request", 
+                  "type": "int"
+                }, 
+                "projectName": {
+                  "default": "HOT Project", 
+                  "type": "string"
+                }, 
+                "tasks": {
+                  "schema": {
+                    "properties": {
+                      "features": {
+                        "items": {
+                          "schema": {
+                            "$ref": "#/definitions/GeoJsonFeature"
+                          }
+                        }, 
+                        "type": "array"
+                      }, 
+                      "type": {
+                        "default": "FeatureCollection", 
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "201": {
+            "description": "Draft project created successfully"
+          }, 
+          "400": {
+            "description": "Client Error - Invalid Request"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Creates a tasking-manager project", 
+        "tags": [
+          "project-admin"
+        ]
+      }
+    }, 
+    "/api/v1/admin/project/{project_id}": {
+      "delete": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique project ID", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Project deleted"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "403": {
+            "description": "Forbidden - users have submitted mapping"
+          }, 
+          "404": {
+            "description": "Project not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Deletes a Tasking-Manager project", 
+        "tags": [
+          "project-admin"
+        ]
+      }, 
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique project ID", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Project found"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "404": {
+            "description": "Project not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Retrieves a Tasking-Manager project", 
+        "tags": [
+          "project-admin"
+        ]
+      }, 
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique project ID", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "description": "JSON object for creating draft project", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "properties": {
+                "allowNonBeginners": {
+                  "default": false, 
+                  "type": "boolean"
+                }, 
+                "allowedUsernames": {
+                  "default": [
+                    "Iain Hunter", 
+                    "LindaA1"
+                  ], 
+                  "items": {
+                    "type": "string"
+                  }, 
+                  "type": "array"
+                }, 
+                "campaignTag": {
+                  "default": "malaria", 
+                  "type": "string"
+                }, 
+                "changesetComment": {
+                  "default": "hotosm-project-1", 
+                  "type": "string"
+                }, 
+                "defaultLocale": {
+                  "default": "en", 
+                  "type": "string"
+                }, 
+                "dueDate": {
+                  "default": "2017-04-11T12:38:49", 
+                  "type": "date"
+                }, 
+                "enforceMapperLevel": {
+                  "default": false, 
+                  "type": "boolean"
+                }, 
+                "enforceValidatorRole": {
+                  "default": false, 
+                  "type": "boolean"
+                }, 
+                "entitiesToMap": {
+                  "default": "Buildings only", 
+                  "type": "string"
+                }, 
+                "imagery": {
+                  "default": "http//www.bing.com/maps/", 
+                  "type": "string"
+                }, 
+                "josmPreset": {
+                  "default": "josm preset goes here", 
+                  "type": "string"
+                }, 
+                "licenseId": {
+                  "default": 1, 
+                  "description": "Id of imagery license associated with the project", 
+                  "type": "integer"
+                }, 
+                "mapperLevel": {
+                  "default": "BEGINNER", 
+                  "type": "string"
+                }, 
+                "mappingEditors": {
+                  "default": [
+                    "ID", 
+                    "JOSM", 
+                    "POTLATCH_2", 
+                    "FIELD_PAPERS"
+                  ], 
+                  "items": {
+                    "type": "string"
+                  }, 
+                  "type": "array"
+                }, 
+                "mappingTypes": {
+                  "default": [
+                    "BUILDINGS", 
+                    "ROADS"
+                  ], 
+                  "items": {
+                    "type": "string"
+                  }, 
+                  "type": "array"
+                }, 
+                "organisationTag": {
+                  "default": "red cross", 
+                  "type": "string"
+                }, 
+                "priorityAreas": {
+                  "items": {
+                    "schema": {
+                      "$ref": "#/definitions/GeoJsonPolygon"
+                    }
+                  }, 
+                  "type": "array"
+                }, 
+                "private": {
+                  "default": false, 
+                  "type": "boolean"
+                }, 
+                "projectInfoLocales": {
+                  "items": {
+                    "schema": {
+                      "$ref": "#/definitions/ProjectInfo"
+                    }
+                  }, 
+                  "type": "array"
+                }, 
+                "projectPriority": {
+                  "default": "MEDIUM", 
+                  "type": "string"
+                }, 
+                "projectStatus": {
+                  "default": "DRAFT", 
+                  "type": "string"
+                }, 
+                "taskCreationMode": {
+                  "default": "GRID", 
+                  "type": "integer"
+                }, 
+                "validationEditors": {
+                  "default": [
+                    "ID", 
+                    "JOSM", 
+                    "POTLATCH_2", 
+                    "FIELD_PAPERS"
+                  ], 
+                  "items": {
+                    "type": "string"
+                  }, 
+                  "type": "array"
+                }
+              }
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Project updated"
+          }, 
+          "400": {
+            "description": "Client Error - Invalid Request"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "404": {
+            "description": "Project not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Updates a Tasking-Manager project", 
+        "tags": [
+          "project-admin"
+        ]
+      }
+    }, 
+    "/api/v1/admin/project/{project_id}/comments": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": 1, 
+            "description": "The unique project ID", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Comments found"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "404": {
+            "description": "No comments found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets all comments for project", 
+        "tags": [
+          "project-admin"
+        ]
+      }
+    }, 
+    "/api/v1/admin/project/{project_id}/invalidate-all": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique project ID", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "All mapped tasks invalidated"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Invalidate all mapped tasks on a project", 
+        "tags": [
+          "project-admin"
+        ]
+      }
+    }, 
+    "/api/v1/admin/project/{project_id}/map-all": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique project ID", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "All tasks mapped"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Map all tasks on a project", 
+        "tags": [
+          "project-admin"
+        ]
+      }
+    }, 
+    "/api/v1/admin/project/{project_id}/message-all": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique project ID", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "description": "JSON object for creating draft project", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "properties": {
+                "message": {
+                  "default": "Thanks for your contribution", 
+                  "required": true, 
+                  "type": "string"
+                }, 
+                "subject": {
+                  "default": "Thanks", 
+                  "required": true, 
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "All mapped tasks validated"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Send message to all contributors to a project", 
+        "tags": [
+          "messaging"
+        ]
+      }
+    }, 
+    "/api/v1/admin/project/{project_id}/reset-all": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique project ID", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "All tasks reset"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Reset all tasks on project back to ready, preserving history.", 
+        "tags": [
+          "project-admin"
+        ]
+      }
+    }, 
+    "/api/v1/admin/project/{project_id}/reset-all-badimagery": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique project ID", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "All bad imagery tasks marked ready for mapping"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Mark all bad imagery tasks ready for mapping", 
+        "tags": [
+          "project-admin"
+        ]
+      }
+    }, 
+    "/api/v1/admin/project/{project_id}/validate-all": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique project ID", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "All mapped tasks validated"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Validate all mapped tasks on a project", 
+        "tags": [
+          "project-admin"
+        ]
+      }
+    }, 
+    "/api/v1/auth/login": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "/take/me/here", 
+            "description": "Route to redirect user once authenticated", 
+            "in": "query", 
+            "name": "redirect_to", 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "302": {
+            "description": "Redirects to OSM"
+          }
+        }, 
+        "summary": "Redirects user to OSM to authenticate", 
+        "tags": [
+          "authentication"
+        ]
+      }
+    }, 
+    "/api/v1/auth/oauth-callback": {
+      "get": {
+        "description": "", 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "302": {
+            "description": "Redirects to login page, or login failed page"
+          }, 
+          "500": {
+            "description": "A problem occurred authenticating the user"
+          }, 
+          "502": {
+            "description": "A problem occurred negotiating with the OSM API"
+          }
+        }, 
+        "summary": "Handles the OSM OAuth callback", 
+        "tags": [
+          "authentication"
+        ]
+      }
+    }, 
+    "/api/v1/grid/intersecting-tiles": {
+      "put": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "description": "JSON object containing aoi and tasks and bool flag for controlling clip grid to aoi", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "properties": {
+                "areaOfInterest": {
+                  "schema": {
+                    "properties": {
+                      "features": {
+                        "items": {
+                          "schema": {
+                            "$ref": "#/definitions/GeoJsonFeature"
+                          }
+                        }, 
+                        "type": "array"
+                      }, 
+                      "type": {
+                        "default": "FeatureCollection", 
+                        "type": "string"
+                      }
+                    }
+                  }
+                }, 
+                "clipToAoi": {
+                  "default": true, 
+                  "type": "boolean"
+                }, 
+                "grid": {
+                  "schema": {
+                    "properties": {
+                      "features": {
+                        "items": {
+                          "schema": {
+                            "$ref": "#/definitions/GeoJsonFeature"
+                          }
+                        }, 
+                        "type": "array"
+                      }, 
+                      "type": {
+                        "default": "FeatureCollection", 
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Intersecting tasks found successfully"
+          }, 
+          "400": {
+            "description": "Client Error - Invalid Request"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets the tiles intersecting the aoi", 
+        "tags": [
+          "grid"
+        ]
+      }
+    }, 
+    "/api/v1/license": {
+      "put": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "description": "JSON object for creating a new mapping license", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "properties": {
+                "description": {
+                  "default": "This imagery is in the public domain.", 
+                  "type": "string"
+                }, 
+                "name": {
+                  "default": "Public Domain", 
+                  "type": "string"
+                }, 
+                "plainText": {
+                  "default": "This imagery is in the public domain.", 
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "New license created"
+          }, 
+          "400": {
+            "description": "Invalid Request"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Creates a new mapping license", 
+        "tags": [
+          "licenses"
+        ]
+      }
+    }, 
+    "/api/v1/license/list": {
+      "get": {
+        "description": "", 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Licenses found"
+          }, 
+          "404": {
+            "description": "Licenses not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get all imagery licenses", 
+        "tags": [
+          "licenses"
+        ]
+      }
+    }, 
+    "/api/v1/license/{license_id}": {
+      "delete": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique license ID", 
+            "in": "path", 
+            "name": "license_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "License deleted"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "404": {
+            "description": "License not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Delete the specified mapping license", 
+        "tags": [
+          "licenses"
+        ]
+      }, 
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": 1, 
+            "description": "The unique license ID", 
+            "in": "path", 
+            "name": "license_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "License found"
+          }, 
+          "404": {
+            "description": "License not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get specified mapping license", 
+        "tags": [
+          "licenses"
+        ]
+      }, 
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique license ID", 
+            "in": "path", 
+            "name": "license_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "description": "JSON object for creating a new mapping license", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "properties": {
+                "description": {
+                  "default": "This imagery is in the public domain.", 
+                  "type": "string"
+                }, 
+                "name": {
+                  "default": "Public Domain", 
+                  "type": "string"
+                }, 
+                "plainText": {
+                  "default": "This imagery is in the public domain.", 
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "New license created"
+          }, 
+          "400": {
+            "description": "Invalid Request"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Update  a new mapping license", 
+        "tags": [
+          "licenses"
+        ]
+      }
+    }, 
+    "/api/v1/messages/delete-multiple": {
+      "delete": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "description": "JSON object containing message ids to delete", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "properties": {
+                "messageIds": {
+                  "items": "integer", 
+                  "required": true, 
+                  "type": "array"
+                }
+              }
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Messages deleted"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Delete specified messages for logged in user", 
+        "tags": [
+          "messaging"
+        ]
+      }
+    }, 
+    "/api/v1/messages/get-all-messages": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "description": "Optional message-type filter", 
+            "in": "query", 
+            "name": "messageType", 
+            "type": "integer"
+          }, 
+          {
+            "description": "Optional from username filter", 
+            "in": "query", 
+            "name": "from", 
+            "type": "string"
+          }, 
+          {
+            "description": "Optional project filter", 
+            "in": "query", 
+            "name": "project", 
+            "type": "string"
+          }, 
+          {
+            "description": "Optional task filter", 
+            "in": "query", 
+            "name": "taskId", 
+            "type": "integer"
+          }, 
+          {
+            "description": "field to sort by, defaults to date", 
+            "in": "query", 
+            "name": "sortBy", 
+            "type": "string"
+          }, 
+          {
+            "description": "direction of sort, defaults to desc", 
+            "in": "query", 
+            "name": "sortDirection", 
+            "type": "string"
+          }, 
+          {
+            "description": "Page of results user requested", 
+            "in": "query", 
+            "name": "page", 
+            "type": "integer"
+          }, 
+          {
+            "description": "Size of page, defaults to 10", 
+            "in": "query", 
+            "name": "pageSize", 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Messages found"
+          }, 
+          "404": {
+            "description": "User has no messages"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get all messages for logged in user", 
+        "tags": [
+          "messaging"
+        ]
+      }
+    }, 
+    "/api/v1/messages/has-new-messages": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Message info"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets count of unread messages", 
+        "tags": [
+          "messaging"
+        ]
+      }
+    }, 
+    "/api/v1/messages/resend-email-verification": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Resends the user their email verification email"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Resends the validation user to the logged in user", 
+        "tags": [
+          "messaging"
+        ]
+      }
+    }, 
+    "/api/v1/messages/{message_id}": {
+      "delete": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique message", 
+            "in": "path", 
+            "name": "message_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Messages found"
+          }, 
+          "403": {
+            "description": "Forbidden, if user attempting to ready other messages"
+          }, 
+          "404": {
+            "description": "Not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Deletes the specified message", 
+        "tags": [
+          "messaging"
+        ]
+      }, 
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique message", 
+            "in": "path", 
+            "name": "message_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Messages found"
+          }, 
+          "403": {
+            "description": "Forbidden, if user attempting to ready other messages"
+          }, 
+          "404": {
+            "description": "Not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets the specified message", 
+        "tags": [
+          "messaging"
+        ]
+      }
+    }, 
+    "/api/v1/project/search": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "BEGINNER", 
+            "in": "query", 
+            "name": "mapperLevel", 
+            "type": "string"
+          }, 
+          {
+            "default": "ROADS,BUILDINGS", 
+            "in": "query", 
+            "name": "mappingTypes", 
+            "type": "string"
+          }, 
+          {
+            "default": "red cross", 
+            "in": "query", 
+            "name": "organisationTag", 
+            "type": "string"
+          }, 
+          {
+            "default": "malaria", 
+            "in": "query", 
+            "name": "campaignTag", 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "Page of results user requested", 
+            "in": "query", 
+            "name": "page", 
+            "type": "integer"
+          }, 
+          {
+            "default": "serbia", 
+            "description": "text to search", 
+            "in": "query", 
+            "name": "textSearch", 
+            "type": "string"
+          }, 
+          {
+            "description": "Authenticated PMs can search for archived or draft statuses", 
+            "in": "query", 
+            "name": "projectStatuses", 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Projects found"
+          }, 
+          "404": {
+            "description": "No projects found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Search active projects", 
+        "tags": [
+          "search"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique project ID", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": false, 
+            "description": "Set to true if file download is preferred", 
+            "in": "query", 
+            "name": "as_file", 
+            "type": "boolean"
+          }, 
+          {
+            "default": false, 
+            "description": "Set to true if only state information is desired", 
+            "in": "query", 
+            "name": "abbreviated", 
+            "type": "boolean"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Project found"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "Project not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get HOT Project for mapping", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/aoi": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": 1, 
+            "description": "The unique project ID", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": true, 
+            "description": "Set to false if file download not preferred", 
+            "in": "query", 
+            "name": "as_file", 
+            "type": "boolean"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Project found"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "Project not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get AOI of Project", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/chat": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": 1, 
+            "description": "The ID of the project to attach the chat message to", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": 1, 
+            "description": "Page of results user requested", 
+            "in": "query", 
+            "name": "page", 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "All messages"
+          }, 
+          "404": {
+            "description": "No chat messages on project"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get all chat messages for project", 
+        "tags": [
+          "messaging"
+        ]
+      }, 
+      "put": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project to attach the chat message to", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "description": "JSON object for creating a new mapping license", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "properties": {
+                "message": {
+                  "default": "This is an awesome project", 
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "201": {
+            "description": "Message posted successfully"
+          }, 
+          "400": {
+            "description": "Invalid Request"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Add a message to project chat", 
+        "tags": [
+          "messaging"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/has-user-locked-tasks": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Task user is working on"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "404": {
+            "description": "User is not working on any tasks"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets any locked task on the project from logged in user", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/has-user-locked-tasks/details": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Task user is working on"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "404": {
+            "description": "User is not working on any tasks"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets details of any locked task on the project from logged in user", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/lock-for-validation": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project the tasks are associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "description": "JSON object for locking task(s)", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "properties": {
+                "taskIds": {
+                  "default": [
+                    1, 
+                    2
+                  ], 
+                  "description": "Array of taskIds for locking", 
+                  "items": {
+                    "type": "integer"
+                  }, 
+                  "type": "array"
+                }
+              }
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Task(s) locked for validation"
+          }, 
+          "400": {
+            "description": "Client Error"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "Task not found"
+          }, 
+          "409": {
+            "description": "User has not accepted license terms of project"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Lock tasks for validation", 
+        "tags": [
+          "validation"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/mapped-tasks-by-user": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Task user is working on"
+          }, 
+          "404": {
+            "description": "No mapped tasks"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get mapped tasks grouped by user", 
+        "tags": [
+          "validation"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/stop-validating": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "description": "JSON object for unlocking a task", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "properties": {
+                "resetTasks": {
+                  "items": {
+                    "schema": {
+                      "$ref": "#/definitions/ResetTask"
+                    }
+                  }, 
+                  "type": "array"
+                }
+              }
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Task unlocked"
+          }, 
+          "400": {
+            "description": "Client Error"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "Task not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Unlock tasks that are locked for validation resetting them to their last status", 
+        "tags": [
+          "validation"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/summary": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Project Summary"
+          }, 
+          "404": {
+            "description": "Project not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets project summary", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/task/{task_id}": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": false, 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique task ID", 
+            "in": "path", 
+            "name": "task_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Task found"
+          }, 
+          "404": {
+            "description": "Task not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get task for mapping", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/task/{task_id}/comment": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique task ID", 
+            "in": "path", 
+            "name": "task_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "description": "JSON object representing the comment", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "$ref": "#/definitions/TaskComment"
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Comment added"
+          }, 
+          "400": {
+            "description": "Client Error"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "Task not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Adds a comment to the task outside of mapping/validation", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/task/{task_id}/lock-for-mapping": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique task ID", 
+            "in": "path", 
+            "name": "task_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Task locked"
+          }, 
+          "400": {
+            "description": "Client Error"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "Task not found"
+          }, 
+          "409": {
+            "description": "User has not accepted license terms of project"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Locks the task for mapping", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/task/{task_id}/split": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique task ID", 
+            "in": "path", 
+            "name": "task_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Task split OK"
+          }, 
+          "400": {
+            "description": "Client Error"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "Task not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Split a task", 
+        "tags": [
+          "grid"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/task/{task_id}/stop-mapping": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique task ID", 
+            "in": "path", 
+            "name": "task_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "description": "JSON object for unlocking a task", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "$ref": "#/definitions/TaskUpdateStop"
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Task unlocked"
+          }, 
+          "400": {
+            "description": "Client Error"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "Task not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Unlock task that is locked for mapping resetting it to it's last status", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/task/{task_id}/undo-mapping": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique task ID", 
+            "in": "path", 
+            "name": "task_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Task found"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "Task not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get task for mapping", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/task/{task_id}/unlock-after-mapping": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": 1, 
+            "description": "The unique task ID", 
+            "in": "path", 
+            "name": "task_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "description": "JSON object for unlocking a task", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "$ref": "#/definitions/TaskUpdateUnlock"
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Task unlocked"
+          }, 
+          "400": {
+            "description": "Client Error"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "Task not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Unlocks the task after mapping completed", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/tasks": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": true, 
+            "description": "Set to true if file download preferred", 
+            "in": "query", 
+            "name": "as_file", 
+            "type": "boolean"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Project found"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "Project not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get tasks as JSON", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/tasks-as-osm-xml": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": "1,2", 
+            "description": "List of tasks; leave blank to retrieve all", 
+            "in": "query", 
+            "name": "tasks", 
+            "type": "string"
+          }, 
+          {
+            "default": false, 
+            "description": "Set to true if file download preferred", 
+            "in": "query", 
+            "name": "as_file", 
+            "type": "boolean"
+          }
+        ], 
+        "produces": [
+          "application/xml"
+        ], 
+        "responses": {
+          "200": {
+            "description": "OSM XML"
+          }, 
+          "400": {
+            "description": "Client Error"
+          }, 
+          "404": {
+            "description": "No mapped tasks"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get tasks as OSM XML", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/tasks_as_gpx": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "default": "1,2", 
+            "description": "List of tasks; leave blank for all", 
+            "in": "query", 
+            "name": "tasks", 
+            "type": "string"
+          }, 
+          {
+            "default": false, 
+            "description": "Set to true if file download preferred", 
+            "in": "query", 
+            "name": "as_file", 
+            "type": "boolean"
+          }
+        ], 
+        "produces": [
+          "application/xml"
+        ], 
+        "responses": {
+          "200": {
+            "description": "GPX XML"
+          }, 
+          "400": {
+            "description": "Client error"
+          }, 
+          "404": {
+            "description": "No mapped tasks"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get tasks as GPX", 
+        "tags": [
+          "mapping"
+        ]
+      }
+    }, 
+    "/api/v1/project/{project_id}/unlock-after-validation": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The ID of the project the task is associated with", 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "description": "JSON object for unlocking a task", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "properties": {
+                "validatedTasks": {
+                  "items": {
+                    "schema": {
+                      "$ref": "#/definitions/ValidatedTask"
+                    }
+                  }, 
+                  "type": "array"
+                }
+              }
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Task unlocked"
+          }, 
+          "400": {
+            "description": "Client Error"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "Task not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Unlocks tasks after validation completed", 
+        "tags": [
+          "validation"
+        ]
+      }
+    }, 
+    "/api/v1/projects/within-bounding-box": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "34.404,-1.034, 34.717,-0.624", 
+            "description": "comma separated list xmin, ymin, xmax, ymax", 
+            "in": "query", 
+            "name": "bbox", 
+            "type": "string"
+          }, 
+          {
+            "default": 4326, 
+            "description": "srid of bbox coords", 
+            "in": "query", 
+            "name": "srid", 
+            "type": "integer"
+          }, 
+          {
+            "default": false, 
+            "description": "limit to projects created by authenticated user", 
+            "in": "query", 
+            "name": "createdByMe", 
+            "required": true, 
+            "type": "boolean"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "ok"
+          }, 
+          "400": {
+            "description": "Client Error - Invalid Request"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Search for projects by bbox projects", 
+        "tags": [
+          "search"
+        ]
+      }
+    }, 
+    "/api/v1/settings": {
+      "get": {
+        "description": "", 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Supported Languages"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets all supported languages", 
+        "tags": [
+          "settings"
+        ]
+      }
+    }, 
+    "/api/v1/stats/project/{project_id}": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Project stats"
+          }, 
+          "404": {
+            "description": "Not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get Project Stats", 
+        "tags": [
+          "stats"
+        ]
+      }
+    }, 
+    "/api/v1/stats/project/{project_id}/activity": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": 1, 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }, 
+          {
+            "description": "Page of results user requested", 
+            "in": "query", 
+            "name": "page", 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Project activity"
+          }, 
+          "404": {
+            "description": "No activity"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get user actvity on a project", 
+        "tags": [
+          "stats"
+        ]
+      }
+    }, 
+    "/api/v1/stats/project/{project_id}/contributions": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": 1, 
+            "in": "path", 
+            "name": "project_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "User contributions"
+          }, 
+          "404": {
+            "description": "No contributions"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get all user contributions on a project", 
+        "tags": [
+          "stats"
+        ]
+      }
+    }, 
+    "/api/v1/stats/summary": {
+      "get": {
+        "description": "", 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Project stats"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get HomePage Stats", 
+        "tags": [
+          "stats"
+        ]
+      }
+    }, 
+    "/api/v1/stats/user/{username}": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Thinkwhere", 
+            "description": "The users username", 
+            "in": "path", 
+            "name": "username", 
+            "required": true, 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "User found"
+          }, 
+          "404": {
+            "description": "User not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get detailed stats about user", 
+        "tags": [
+          "user"
+        ]
+      }
+    }, 
+    "/api/v1/tags/campaigns": {
+      "get": {
+        "description": "", 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Campaign tags"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets all campaign tags", 
+        "tags": [
+          "tags"
+        ]
+      }
+    }, 
+    "/api/v1/tags/organisations": {
+      "get": {
+        "description": "", 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Organisation tags"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets all organisation tags", 
+        "tags": [
+          "tags"
+        ]
+      }
+    }, 
+    "/api/v1/user-id/{userid}": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded sesesion token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "The users user id", 
+            "in": "path", 
+            "name": "userid", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "User found"
+          }, 
+          "404": {
+            "description": "User not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets user information by id", 
+        "tags": [
+          "user"
+        ]
+      }
+    }, 
+    "/api/v1/user/accept-license/{license_id}": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": 1, 
+            "description": "ID of license terms have been accepted for", 
+            "in": "path", 
+            "name": "license_id", 
+            "required": true, 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Terms accepted"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "404": {
+            "description": "User or license not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Post to indicate user has accepted license terms", 
+        "tags": [
+          "user"
+        ]
+      }
+    }, 
+    "/api/v1/user/search-all": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "description": "Page of results user requested", 
+            "in": "query", 
+            "name": "page", 
+            "type": "integer"
+          }, 
+          {
+            "description": "Full or part username", 
+            "in": "query", 
+            "name": "username", 
+            "type": "integer"
+          }, 
+          {
+            "description": "Role of User, eg ADMIN, PROJECT_MANAGER", 
+            "in": "query", 
+            "name": "role", 
+            "type": "string"
+          }, 
+          {
+            "description": "Level of User, eg BEGINNER", 
+            "in": "query", 
+            "name": "level", 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Users found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets paged list of all usernames", 
+        "tags": [
+          "user"
+        ]
+      }
+    }, 
+    "/api/v1/user/search/filter/{username}": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "ab", 
+            "description": "Partial or full username", 
+            "in": "path", 
+            "name": "username", 
+            "type": "string"
+          }, 
+          {
+            "description": "Page of results user requested", 
+            "in": "query", 
+            "name": "page", 
+            "type": "integer"
+          }, 
+          {
+            "description": "Optional, promote project participants to head of results", 
+            "in": "query", 
+            "name": "projectId", 
+            "type": "integer"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Users found"
+          }, 
+          "404": {
+            "description": "User not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets paged lists of users matching username filter", 
+        "tags": [
+          "user"
+        ]
+      }
+    }, 
+    "/api/v1/user/set-expert-mode/{is_expert}": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "description": "true to enable expert mode, false to disable", 
+            "in": "path", 
+            "name": "is_expert", 
+            "required": true, 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Mode set"
+          }, 
+          "400": {
+            "description": "Bad Request - Client Error"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "404": {
+            "description": "User not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Allows user to enable or disable expert mode", 
+        "tags": [
+          "user"
+        ]
+      }
+    }, 
+    "/api/v1/user/update-details": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "description": "JSON object for creating draft project", 
+            "in": "body", 
+            "name": "body", 
+            "required": true, 
+            "schema": {
+              "properties": {
+                "emailAddress": {
+                  "default": "test@test.com", 
+                  "type": "string"
+                }, 
+                "facebookId": {
+                  "default": "fbme", 
+                  "type": "string"
+                }, 
+                "linkedinId": {
+                  "default": "linkme", 
+                  "type": "string"
+                }, 
+                "twitterId": {
+                  "default": "tweeter", 
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Details saved"
+          }, 
+          "400": {
+            "description": "Client Error - Invalid Request"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Updates user info", 
+        "tags": [
+          "user"
+        ]
+      }
+    }, 
+    "/api/v1/user/{username}": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "Thinkwhere", 
+            "description": "The users username", 
+            "in": "path", 
+            "name": "username", 
+            "required": true, 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "User found"
+          }, 
+          "404": {
+            "description": "User not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets user information", 
+        "tags": [
+          "user"
+        ]
+      }
+    }, 
+    "/api/v1/user/{username}/invalidated-tasks": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "description": "The users username", 
+            "in": "path", 
+            "name": "username", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "description": "treats user as validator, rather than mapper, if true", 
+            "in": "query", 
+            "name": "asValidator", 
+            "type": "string"
+          }, 
+          {
+            "description": "field to sort by, defaults to action_date", 
+            "in": "query", 
+            "name": "sortBy", 
+            "type": "string"
+          }, 
+          {
+            "description": "direction of sort, defaults to desc", 
+            "in": "query", 
+            "name": "sortDirection", 
+            "type": "string"
+          }, 
+          {
+            "description": "Page of results user requested", 
+            "in": "query", 
+            "name": "page", 
+            "type": "integer"
+          }, 
+          {
+            "description": "Size of page, defaults to 10", 
+            "in": "query", 
+            "name": "pageSize", 
+            "type": "integer"
+          }, 
+          {
+            "description": "Optional project filter", 
+            "in": "query", 
+            "name": "project", 
+            "type": "integer"
+          }, 
+          {
+            "description": "Optional filter for open/closed invalidations", 
+            "in": "query", 
+            "name": "closed", 
+            "type": "boolean"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Invalidated tasks user has invalidated"
+          }, 
+          "404": {
+            "description": "No invalidated tasks"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Get invalidated tasks either mapped by user or invalidated by user", 
+        "tags": [
+          "validation"
+        ]
+      }
+    }, 
+    "/api/v1/user/{username}/mapped-projects": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "en", 
+            "description": "Language user is requesting", 
+            "in": "header", 
+            "name": "Accept-Language", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "Thinkwhere", 
+            "description": "The users username", 
+            "in": "path", 
+            "name": "username", 
+            "required": true, 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Mapped projects found"
+          }, 
+          "404": {
+            "description": "No mapped projects found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Gets projects user has mapped", 
+        "tags": [
+          "user"
+        ]
+      }
+    }, 
+    "/api/v1/user/{username}/osm-details": {
+      "get": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Thinkwhere", 
+            "description": "The users username", 
+            "in": "path", 
+            "name": "username", 
+            "required": true, 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "User found"
+          }, 
+          "404": {
+            "description": "User not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }, 
+          "502": {
+            "description": "Bad response from OSM"
+          }
+        }, 
+        "summary": "Gets details from OSM for the specified username", 
+        "tags": [
+          "user"
+        ]
+      }
+    }, 
+    "/api/v1/user/{username}/set-level/{level}": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "Thinkwhere", 
+            "description": "The users username", 
+            "in": "path", 
+            "name": "username", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "ADVANCED", 
+            "description": "The mapping level that should be set", 
+            "in": "path", 
+            "name": "level", 
+            "required": true, 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Level set"
+          }, 
+          "400": {
+            "description": "Bad Request - Client Error"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "404": {
+            "description": "User not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Allows PMs to set a users mapping level", 
+        "tags": [
+          "user"
+        ]
+      }
+    }, 
+    "/api/v1/user/{username}/set-role/{role}": {
+      "post": {
+        "description": "", 
+        "parameters": [
+          {
+            "default": "Token sessionTokenHere==", 
+            "description": "Base64 encoded session token", 
+            "in": "header", 
+            "name": "Authorization", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "Thinkwhere", 
+            "description": "The users username", 
+            "in": "path", 
+            "name": "username", 
+            "required": true, 
+            "type": "string"
+          }, 
+          {
+            "default": "ADMIN", 
+            "description": "The role to add", 
+            "in": "path", 
+            "name": "role", 
+            "required": true, 
+            "type": "string"
+          }
+        ], 
+        "produces": [
+          "application/json"
+        ], 
+        "responses": {
+          "200": {
+            "description": "Role set"
+          }, 
+          "401": {
+            "description": "Unauthorized - Invalid credentials"
+          }, 
+          "403": {
+            "description": "Forbidden"
+          }, 
+          "404": {
+            "description": "User not found"
+          }, 
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }, 
+        "summary": "Allows PMs to set the users role", 
+        "tags": [
+          "user"
+        ]
+      }
+    }
+  }, 
+  "swagger": "2.0"
+}

@@ -1,26 +1,30 @@
 {
-  "name": "mapSwazi",
-  "version": "1.0.0",
+  "name": "mapswazi",
+  "version": "0.0.1",
   "description": "",
   "main": "assets/js/dev.js",
   "dependencies": {
     "bulma": "^0.7.1",
-    "leaflet": "^1.5.1",
+    "ol": "^5.3.3",
     "parcel": "^1.11.0",
-    "plyr": "^3.5.4"
+    "swagger-client": "^3.9.0"
   },
   "devDependencies": {},
   "scripts": {
-    "build": "parcel build --no-source-maps -d _site/assets/js -o site.js assets/js/dev.js",
-    "build_dev": "parcel build --no-minify --no-source-maps -d _site/assets/js -o site.js assets/js/dev.js",
-    "watch": "watch -n5 -x npm run build_dev"
+    "build": "parcel build --no-source-maps -d assets/js -o site.js assets/js/dev.js",
+      "build_dev": "parcel build --no-minify --no-source-maps -d assets/js -o site.js assets/js/dev.js",
+      "watch": "watch -n5 -x npm run build_dev"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/1papaya/mapSwazi.git"
   },
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "sko",
+    "buffs"
+  ],
+  "author": "1papaya",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/1papaya/mapSwazi/issues"
   },
