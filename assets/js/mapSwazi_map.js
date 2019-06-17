@@ -1,31 +1,22 @@
 import {Map, View, inherits} from 'ol';
-
 import lyrs from './mapSwazi_layers';
 
-// controls
-import {defaults as defaultsControl,
-        FullScreen, OverviewMap} from 'ol/control';
-
-// interactions
+import {defaults as defaultsControl, FullScreen, OverviewMap} from 'ol/control';
 import {defaults as defaultsInteraction} from 'ol/interaction';
 import Select from 'ol/interaction/Select';
-
-// Swagger
-import Swagger from 'swagger-client';
-import taskmgr_api_spec from './taskmgr_spec_wicked_slim';
 
 function mapSwazi_map(target, projects) {
 
     this.bounds = [3427637.922163467, -3163184.323967456,
                    3577228.0000320906, -2964196.586792509];
-    this.taskmgr_api = Swagger({spec: taskmgr_api_spec});
 
     // Initialize
     var call_opts = {
         target: target,
         layers: [
             lyrs.osm,
-            lyrs.swazi_bounds
+            lyrs.swazi_bounds,
+            lyrs.taskMgr
         ],
         view: this.get_fitted_view(target, this.bounds),
         interactions: defaultsInteraction(),
