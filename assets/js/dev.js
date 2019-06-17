@@ -1,4 +1,4 @@
-import p_map from "./projects_map";
+import mapSwazi_map from "./mapSwazi_map";
 
 document.addEventListener("DOMContentLoaded", function() {
 
@@ -7,12 +7,8 @@ document.addEventListener("DOMContentLoaded", function() {
     //
 
     document.querySelectorAll("#projects-map").forEach(function(pm) {
-        new p_map({
-            target: pm,
-            projects: []
-        });
-    });
 
-    var swazi_bounds = [[-27.317410, 30.790995], [-25.718006, 32.134785]];
+        window.mapSwazi_map = new mapSwazi_map(pm, []);
+    });
 
 });
