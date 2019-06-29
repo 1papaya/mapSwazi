@@ -1,5 +1,7 @@
 import {Map, View, inherits} from 'ol';
 import lyrs from './mapSwazi_layers';
+import taskMgrSource from './ol_source_taskMgr';
+import VectorLayer from 'ol/layer/Vector';
 
 import {defaults as defaultsControl, FullScreen, OverviewMap} from 'ol/control';
 import {defaults as defaultsInteraction} from 'ol/interaction';
@@ -10,13 +12,22 @@ function mapSwazi_map(target, projects) {
     this.bounds = [3427637.922163467, -3163184.323967456,
                    3577228.0000320906, -2964196.586792509];
 
+    this.projects = projects;
+
+    // Get Projects
+    var taskmgr_lyr = new VectorLayer({
+        source: new taskMgrSource({
+            projects: projects
+        })
+    });
+
     // Initialize
     var call_opts = {
         target: target,
         layers: [
             lyrs.osm,
             lyrs.swazi_bounds,
-            lyrs.taskMgr
+            taskmgr_lyr
         ],
         view: this.get_fitted_view(target, this.bounds),
         interactions: defaultsInteraction(),

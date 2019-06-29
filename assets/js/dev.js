@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     document.querySelectorAll("#projects-map").forEach(function(pm) {
 
-        window.mapSwazi_map = new mapSwazi_map(pm, []);
+        window.mapSwazi_map = new mapSwazi_map(pm, [6204]);
     });
 
 });

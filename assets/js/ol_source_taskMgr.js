@@ -1,5 +1,6 @@
 // ol
 import {inherits} from 'ol';
+import ol_format_GeoJSON from 'ol/format/GeoJSON';
 import ol_source_Vector from 'ol/source/Vector';
 
 // Swagger
@@ -28,14 +29,28 @@ ol_source_taskMgr.prototype._loader = function(extent, resolution, projection) {
     // Swagger API request for each project
     // when all api requests have come back, assemble features into GeoJSON format
 
-    var p_data = {};
+    var p_data = [];
 
-    this.api.apis.mapping.get_api_v1_project__project_id_({
-        "as_file": false,
-        "abbreviated": true,
-        "project_id": 5670,
-        "Accept-Language": "en"
-    }).then((sko) => { console.log(sko); });
+    for (const proj of this.projects) {
+        var self = this;
+
+        this.api.apis.mapping.get_api_v1_project__project_id_({
+            "as_file": false,
+            "abbreviated": true,
+            "project_id": proj,
+            "Accept-Language": "en"
+        }).then((p_data) => {
+            var p_geojson = self._project_to_feature(p_data.body);
+            var p_feat = new ol_format_GeoJSON().readFeature(p_geojson,
+                                                             {featureProjection: projection});
+
+            self.addFeatures([p_feat]);
+
+            console.log([p_geojson, p_feat]);
+        });
+
+    }
+
 };
 
 ol_source_taskMgr.prototype._project_to_feature = function(p) {
