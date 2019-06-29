@@ -25,10 +25,7 @@ inherits(ol_source_taskMgr, ol_source_Vector);
 
 ol_source_taskMgr.prototype._loader = function(extent, resolution, projection) {
 
-    // loop thru this.projects
-    // Swagger API request for each project
-    // when all api requests have come back, assemble features into GeoJSON format
-
+    this._projects_loaded = 0;
     var p_data = [];
 
     for (const proj of this.projects) {
@@ -40,17 +37,24 @@ ol_source_taskMgr.prototype._loader = function(extent, resolution, projection) {
             "project_id": proj,
             "Accept-Language": "en"
         }).then((p_data) => {
-            var p_geojson = self._project_to_feature(p_data.body);
-            var p_feat = new ol_format_GeoJSON().readFeature(p_geojson,
-                                                             {featureProjection: projection});
-
-            self.addFeatures([p_feat]);
-
-            console.log([p_geojson, p_feat]);
+            self._project_loaded(p_data, projection);
         });
-
     }
+};
 
+ol_source_taskMgr.prototype._project_loaded = function(p_data, projection) {
+    this._projects_loaded = this._projects_loaded + 1;
+
+    var p_geojson = this._project_to_feature(p_data.body);
+    var p_feat = new ol_format_GeoJSON().readFeature(p_geojson,
+                                                     {featureProjection: projection});
+
+    this.addFeatures([p_feat]);
+
+    this.dispatchEvent({ type: 'project_loaded', project: p_feat });
+
+    if (this._projects_loaded == this.projects.length)
+        this.dispatchEvent({ type: 'projects_loaded' });
 };
 
 ol_source_taskMgr.prototype._project_to_feature = function(p) {

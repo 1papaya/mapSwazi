@@ -1,8 +1,18 @@
 import {Map, View, inherits} from 'ol';
-import lyrs from './mapSwazi_layers';
-import taskMgrSource from './ol_source_taskMgr';
-import VectorLayer from 'ol/layer/Vector';
 
+// layers
+import VectorLayer from 'ol/layer/Vector';
+import TileLayer from 'ol/layer/Tile';
+
+// sources
+import VectorSource from 'ol/source/Vector';
+import taskMgrSource from './ol_source_taskMgr';
+import OSM from 'ol/source/OSM';
+
+// formats
+import GeoJSON from 'ol/format/GeoJSON';
+
+// controls & interactions
 import {defaults as defaultsControl, FullScreen, OverviewMap} from 'ol/control';
 import {defaults as defaultsInteraction} from 'ol/interaction';
 import Select from 'ol/interaction/Select';
@@ -14,12 +24,27 @@ function mapSwazi_map(target, projects) {
 
     this.projects = projects;
 
-    // Get Projects
-    var taskmgr_lyr = new VectorLayer({
-        source: new taskMgrSource({
-            projects: projects
+    // Layers
+    var lyrs = {
+        osm: new TileLayer({
+            source: new OSM()
+        }),
+        swazi_bounds: new VectorLayer({
+            source: new VectorSource({
+                url: '/assets/data/adm0_eSwatini.geojson',
+                format: new GeoJSON()
+            })
+        }),
+        taskmgr: new VectorLayer({
+            source: new taskMgrSource({
+                projects: projects
+            })
         })
-    });
+    };
+
+    // event listeners
+    lyrs['taskmgr'].getSource().addEventListener('project_loaded', function(e) {console.log(["LOADED", e])});
+    lyrs['taskmgr'].getSource().addEventListener('projects_loaded', function(e) {console.log(["ALL LOADED", e])});
 
     // Initialize
     var call_opts = {
@@ -27,7 +52,7 @@ function mapSwazi_map(target, projects) {
         layers: [
             lyrs.osm,
             lyrs.swazi_bounds,
-            taskmgr_lyr
+            lyrs.taskmgr
         ],
         view: this.get_fitted_view(target, this.bounds),
         interactions: defaultsInteraction(),
