@@ -31,7 +31,7 @@ ol_source_taskMgr.prototype._loader = function(extent, resolution, projection) {
 
         this.api.apis.mapping.get_api_v1_project__project_id_({
             "as_file": false,
-            "abbreviated": true,
+            "abbreviated": false,
             "project_id": proj,
             "Accept-Language": "en"
         }).then((p_data) => {
@@ -43,16 +43,24 @@ ol_source_taskMgr.prototype._loader = function(extent, resolution, projection) {
 ol_source_taskMgr.prototype._project_loaded = function(p_data, projection) {
     this._projects_loaded = this._projects_loaded + 1;
 
-    var p_geojson = this._project_to_feature(p_data.body);
-    var p_feat = new ol_format_GeoJSON().readFeature(p_geojson,
-                                                     {featureProjection: projection});
+    var features = [];
 
-    this.addFeatures([p_feat]);
+    for (var task of p_data.body.tasks.features) {
+        var p_feat = new ol_format_GeoJSON().readFeature(task, {featureProjection: projection});
+
+        features.push(p_feat);
+    }
+
+    this.addFeatures(features);
 
     this.dispatchEvent({ type: 'project_loaded', project: p_feat });
 
     if (this._projects_loaded == this.projects.length)
         this.dispatchEvent({ type: 'projects_loaded' });
+};
+
+ol_source_taskMgr.prototype._tasks_to_features = function(ts) {
+    
 };
 
 ol_source_taskMgr.prototype._project_to_feature = function(p) {

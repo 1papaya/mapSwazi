@@ -7,11 +7,13 @@ permalink: /projects
 
 <div id="tasks" class="container">
 
+    <!--
     <div class="columns">
         <div class="column">
             <div class="overview-map" data-projects="{{ site.data.projects | map: 'id' | jsonify }}"></div>
         </div>
     </div>
+    -->
 
     <div class="columns is-multiline">
         {% for proj in site.data.projects %}
@@ -19,7 +21,7 @@ permalink: /projects
             <div class="content project">
                 <div class="hrheading">
                     <span>
-                        <a href="https://tasks.hotosm.org/project/{{ proj.id }}/dashboard">
+                        <a href="https://tasks.hotosm.org/project/{{ proj.id }}/">
                             {{ proj.name }}
                         </a>
                     </span>

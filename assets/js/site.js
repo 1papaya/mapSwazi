@@ -84918,7 +84918,7 @@ ol_source_taskMgr.prototype._loader = function (extent, resolution, projection) 
       var self = this;
       this.api.apis.mapping.get_api_v1_project__project_id_({
         "as_file": false,
-        "abbreviated": true,
+        "abbreviated": false,
         "project_id": proj,
         "Accept-Language": "en"
       }).then(function (p_data) {
@@ -84943,13 +84943,36 @@ ol_source_taskMgr.prototype._loader = function (extent, resolution, projection) 
 
 ol_source_taskMgr.prototype._project_loaded = function (p_data, projection) {
   this._projects_loaded = this._projects_loaded + 1;
+  console.log(p_data);
+  var features = [];
+  var _iteratorNormalCompletion2 = true;
+  var _didIteratorError2 = false;
+  var _iteratorError2 = undefined;
 
-  var p_geojson = this._project_to_feature(p_data.body);
+  try {
+    for (var _iterator2 = p_data.body.tasks.features[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+      var task = _step2.value;
+      var p_feat = new _GeoJSON.default().readFeature(task, {
+        featureProjection: projection
+      });
+      features.push(p_feat);
+    }
+  } catch (err) {
+    _didIteratorError2 = true;
+    _iteratorError2 = err;
+  } finally {
+    try {
+      if (!_iteratorNormalCompletion2 && _iterator2.return != null) {
+        _iterator2.return();
+      }
+    } finally {
+      if (_didIteratorError2) {
+        throw _iteratorError2;
+      }
+    }
+  }
 
-  var p_feat = new _GeoJSON.default().readFeature(p_geojson, {
-    featureProjection: projection
-  });
-  this.addFeatures([p_feat]);
+  this.addFeatures(features);
   this.dispatchEvent({
     type: 'project_loaded',
     project: p_feat
@@ -84958,6 +84981,8 @@ ol_source_taskMgr.prototype._project_loaded = function (p_data, projection) {
     type: 'projects_loaded'
   });
 };
+
+ol_source_taskMgr.prototype._tasks_to_features = function (ts) {};
 
 ol_source_taskMgr.prototype._project_to_feature = function (p) {
   var p_copy = Object.assign({}, p);
@@ -85062,7 +85087,8 @@ function project_map(target, project) {
     var p_view = new _views.LayerView(p_lyr, p_el);
     self.getView().animate({
       center: p_view.getCenter(),
-      zoom: p_view.getZoom()
+      zoom: p_view.getZoom(),
+      duration: 2000
     });
   }); // Initialize
 
