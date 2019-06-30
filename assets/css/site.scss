@@ -215,6 +215,10 @@ footer {
 
 .project-map {
     min-height: 290px;
+
+    &:hover {
+        cursor: pointer;
+    }
 }
 
 .level.stats {

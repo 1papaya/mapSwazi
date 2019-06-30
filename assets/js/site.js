@@ -85060,6 +85060,7 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 var statuses = {
   "READY": [255, 0, 0, 0],
   "MAPPED": [255, 198, 12, 0.4],
+  "LOCKED": [18, 89, 240, 0.4],
   "VALIDATED": [0, 128, 0, 0.4]
 };
 var taskmgr_sty = new _Style.default({
@@ -85109,6 +85110,8 @@ var _interaction = require("ol/interaction");
 
 var _Select = _interopRequireDefault(require("ol/interaction/Select"));
 
+var _condition = require("ol/events/condition");
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 // views
@@ -85123,6 +85126,22 @@ function project_map(target, project) {
       projects: [project]
     }),
     style: _styles.default.taskmgr
+  }); // Add select interaction
+
+  var select_task = new _Select.default({
+    condition: _condition.click,
+    layers: [taskMgr]
+  });
+  select_task.on('select', function (e) {
+    console.log(e);
+    var p_id = e.target.getMap().get('project_id');
+    var t_id = e.selected[0].get('taskId');
+    var url = "https://tasks.hotosm.org/project/" + p_id + "?task=" + t_id;
+    window.open(url, "_blank");
+  });
+  var hover_task = new _Select.default({
+    condition: _condition.pointerMove,
+    layers: [taskMgr]
   }); // Zoom to tasking layer on load
 
   var self = this;
@@ -85138,14 +85157,17 @@ function project_map(target, project) {
   }); // Initialize
 
   var call_opts = {
+    project_id: project,
     target: target,
     layers: [_layers.default.hotosm, taskMgr, _layers.default.bounds_clip],
     view: new _views.SwaziView(target),
-    interactions: (0, _interaction.defaults)(),
+    interactions: (0, _interaction.defaults)().extend([select_task, hover_task]),
     controls: (0, _control.defaults)()
   };
 
   _ol.Map.call(this, call_opts);
+
+  this.set("project_id", project);
 }
 
 ;
@@ -85160,7 +85182,7 @@ project_map.prototype.getLayerByName = function (name) {
 };
 
 module.exports = project_map;
-},{"ol":"LDxD","../views":"tbdy","../layers":"QN0b","ol/layer/Vector":"BGzd","../source/TaskMgr":"Z3Lv","../styles":"XEZO","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"/vRa":[function(require,module,exports) {
+},{"ol":"LDxD","../views":"tbdy","../layers":"QN0b","ol/layer/Vector":"BGzd","../source/TaskMgr":"Z3Lv","../styles":"XEZO","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs","ol/events/condition":"geXY"}],"/vRa":[function(require,module,exports) {
 "use strict";
 
 var _overview = _interopRequireDefault(require("./map/overview"));
