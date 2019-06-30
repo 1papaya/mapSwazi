@@ -59436,7 +59436,32 @@ var _WebGLMap = _interopRequireDefault(require("./WebGLMap.js"));
 var _util = require("./util.js");
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-},{"./AssertionError.js":"cI7L","./Collection.js":"UC92","./Disposable.js":"nie2","./Feature.js":"cEtg","./Geolocation.js":"FR6C","./Graticule.js":"e+jO","./Image.js":"GllS","./ImageBase.js":"38Kn","./ImageCanvas.js":"0Og2","./ImageTile.js":"tPcm","./Kinetic.js":"z1mr","./Map.js":"Xu49","./MapBrowserEvent.js":"LhPi","./MapBrowserEventHandler.js":"n5H5","./MapBrowserPointerEvent.js":"YgcH","./MapEvent.js":"NwQQ","./Object.js":"YrNp","./Observable.js":"YGGN","./Overlay.js":"+yGC","./PluggableMap.js":"xloC","./Tile.js":"lLEG","./TileCache.js":"g4cv","./TileQueue.js":"LiN4","./TileRange.js":"245k","./VectorImageTile.js":"LJ8r","./VectorTile.js":"bj7C","./View.js":"OW7R","./WebGLMap.js":"T2h7","./util.js":"3bmr"}],"84Mk":[function(require,module,exports) {
+},{"./AssertionError.js":"cI7L","./Collection.js":"UC92","./Disposable.js":"nie2","./Feature.js":"cEtg","./Geolocation.js":"FR6C","./Graticule.js":"e+jO","./Image.js":"GllS","./ImageBase.js":"38Kn","./ImageCanvas.js":"0Og2","./ImageTile.js":"tPcm","./Kinetic.js":"z1mr","./Map.js":"Xu49","./MapBrowserEvent.js":"LhPi","./MapBrowserEventHandler.js":"n5H5","./MapBrowserPointerEvent.js":"YgcH","./MapEvent.js":"NwQQ","./Object.js":"YrNp","./Observable.js":"YGGN","./Overlay.js":"+yGC","./PluggableMap.js":"xloC","./Tile.js":"lLEG","./TileCache.js":"g4cv","./TileQueue.js":"LiN4","./TileRange.js":"245k","./VectorImageTile.js":"LJ8r","./VectorTile.js":"bj7C","./View.js":"OW7R","./WebGLMap.js":"T2h7","./util.js":"3bmr"}],"tbdy":[function(require,module,exports) {
+"use strict";
+
+var _ol = require("ol");
+
+function SwaziView(target) {
+  var padding = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 10;
+  var bounds = [3427637.922163467, -3163184.323967456, 3577228.0000320906, -2964196.586792509];
+
+  _ol.View.call(this, {
+    extent: bounds
+  });
+
+  this.fit(bounds, {
+    size: [target.offsetHeight, target.offsetWidth],
+    padding: [padding, padding, padding, padding],
+    constrainResolution: false
+  });
+  this.setMinZoom(this.getZoom());
+}
+
+(0, _ol.inherits)(SwaziView, _ol.View);
+module.exports = {
+  SwaziView: SwaziView
+};
+},{"ol":"LDxD"}],"84Mk":[function(require,module,exports) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -84934,6 +84959,8 @@ exports.default = _default;
 
 var _ol = require("ol");
 
+var _views = require("../views");
+
 var _layers = _interopRequireDefault(require("../layers"));
 
 var _Vector = _interopRequireDefault(require("ol/layer/Vector"));
@@ -84948,28 +84975,24 @@ var _Select = _interopRequireDefault(require("ol/interaction/Select"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+// views
 // layers
 // controls & interactions
 function overview_map(target, projects) {
-  this.bounds = [3427637.922163467, -3163184.323967456, 3577228.0000320906, -2964196.586792509];
-  this.projects = projects; // build taskmgr
-
+  // Layers
   var taskMgr = new _Vector.default({
     source: new _TaskMgr.default({
       projects: projects
     })
   });
   var self = this;
-  taskMgr.getSource().addEventListener('projects_loaded', function (e) {
-    self.dispatchEvent({
-      type: 'projects_loaded'
-    });
+  taskMgr.getSource().addEventListener('projects_loaded', function (e) {//self.dispatchEvent({ type: 'projects_loaded' });
   }); // Initialize
 
   var call_opts = {
     target: target,
-    layers: [_layers.default.hotosm, _layers.default.swazi_bounds, taskMgr, _layers.default.bounds_clip],
-    view: this.get_fitted_view(target, this.bounds),
+    layers: [_layers.default.hotosm, taskMgr, _layers.default.bounds_clip],
+    view: new _views.SwaziView(target),
     interactions: (0, _interaction.defaults)(),
     controls: (0, _control.defaults)()
   };
@@ -84979,23 +85002,8 @@ function overview_map(target, projects) {
 
 ;
 (0, _ol.inherits)(overview_map, _ol.Map);
-
-overview_map.prototype.get_fitted_view = function (target, bounds) {
-  var padding = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 10;
-  var view = new _ol.View({
-    extent: bounds
-  });
-  view.fit(bounds, {
-    size: [target.offsetHeight, target.offsetWidth],
-    padding: [padding, padding, padding, padding],
-    constrainResolution: false
-  });
-  view.setMinZoom(view.getZoom());
-  return view;
-};
-
 module.exports = overview_map;
-},{"ol":"LDxD","../layers":"QN0b","ol/layer/Vector":"BGzd","../source/TaskMgr":"Z3Lv","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"/vRa":[function(require,module,exports) {
+},{"ol":"LDxD","../views":"tbdy","../layers":"QN0b","ol/layer/Vector":"BGzd","../source/TaskMgr":"Z3Lv","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"/vRa":[function(require,module,exports) {
 "use strict";
 
 var _overview = _interopRequireDefault(require("./map/overview"));
