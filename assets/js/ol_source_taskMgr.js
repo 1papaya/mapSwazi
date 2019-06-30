@@ -71,11 +71,4 @@ ol_source_taskMgr.prototype._project_to_feature = function(p) {
     return feature;
 };
 
-ol_source_taskMgr.prototype._projects_to_collection = function(ps) {
-    return {
-        "type": "FeatureCollection",
-        "features": ps
-    };
-};
-
 export default ol_source_taskMgr;

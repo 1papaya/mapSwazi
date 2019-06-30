@@ -59436,7 +59436,253 @@ var _WebGLMap = _interopRequireDefault(require("./WebGLMap.js"));
 var _util = require("./util.js");
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-},{"./AssertionError.js":"cI7L","./Collection.js":"UC92","./Disposable.js":"nie2","./Feature.js":"cEtg","./Geolocation.js":"FR6C","./Graticule.js":"e+jO","./Image.js":"GllS","./ImageBase.js":"38Kn","./ImageCanvas.js":"0Og2","./ImageTile.js":"tPcm","./Kinetic.js":"z1mr","./Map.js":"Xu49","./MapBrowserEvent.js":"LhPi","./MapBrowserEventHandler.js":"n5H5","./MapBrowserPointerEvent.js":"YgcH","./MapEvent.js":"NwQQ","./Object.js":"YrNp","./Observable.js":"YGGN","./Overlay.js":"+yGC","./PluggableMap.js":"xloC","./Tile.js":"lLEG","./TileCache.js":"g4cv","./TileQueue.js":"LiN4","./TileRange.js":"245k","./VectorImageTile.js":"LJ8r","./VectorTile.js":"bj7C","./View.js":"OW7R","./WebGLMap.js":"T2h7","./util.js":"3bmr"}],"y5uw":[function(require,module,exports) {
+},{"./AssertionError.js":"cI7L","./Collection.js":"UC92","./Disposable.js":"nie2","./Feature.js":"cEtg","./Geolocation.js":"FR6C","./Graticule.js":"e+jO","./Image.js":"GllS","./ImageBase.js":"38Kn","./ImageCanvas.js":"0Og2","./ImageTile.js":"tPcm","./Kinetic.js":"z1mr","./Map.js":"Xu49","./MapBrowserEvent.js":"LhPi","./MapBrowserEventHandler.js":"n5H5","./MapBrowserPointerEvent.js":"YgcH","./MapEvent.js":"NwQQ","./Object.js":"YrNp","./Observable.js":"YGGN","./Overlay.js":"+yGC","./PluggableMap.js":"xloC","./Tile.js":"lLEG","./TileCache.js":"g4cv","./TileQueue.js":"LiN4","./TileRange.js":"245k","./VectorImageTile.js":"LJ8r","./VectorTile.js":"bj7C","./View.js":"OW7R","./WebGLMap.js":"T2h7","./util.js":"3bmr"}],"84Mk":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+/**
+ * @module ol/layer/TileProperty
+ */
+
+/**
+ * @enum {string}
+ */
+var _default = {
+  PRELOAD: 'preload',
+  USE_INTERIM_TILES_ON_ERROR: 'useInterimTilesOnError'
+}; //# sourceMappingURL=TileProperty.js.map
+
+exports.default = _default;
+},{}],"tAJs":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _LayerType = _interopRequireDefault(require("../LayerType.js"));
+
+var _Layer = _interopRequireDefault(require("./Layer.js"));
+
+var _TileProperty = _interopRequireDefault(require("./TileProperty.js"));
+
+var _obj = require("../obj.js");
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/**
+ * @module ol/layer/Tile
+ */
+
+/**
+ * @typedef {Object} Options
+ * @property {number} [opacity=1] Opacity (0, 1).
+ * @property {boolean} [visible=true] Visibility.
+ * @property {import("../extent.js").Extent} [extent] The bounding extent for layer rendering.  The layer will not be
+ * rendered outside of this extent.
+ * @property {number} [zIndex] The z-index for layer rendering.  At rendering time, the layers
+ * will be ordered, first by Z-index and then by position. When `undefined`, a `zIndex` of 0 is assumed
+ * for layers that are added to the map's `layers` collection, or `Infinity` when the layer's `setMap()`
+ * method was used.
+ * @property {number} [minResolution] The minimum resolution (inclusive) at which this layer will be
+ * visible.
+ * @property {number} [maxResolution] The maximum resolution (exclusive) below which this layer will
+ * be visible.
+ * @property {number} [preload=0] Preload. Load low-resolution tiles up to `preload` levels. `0`
+ * means no preloading.
+ * @property {import("../source/Tile.js").default} [source] Source for this layer.
+ * @property {import("../PluggableMap.js").default} [map] Sets the layer as overlay on a map. The map will not manage
+ * this layer in its layers collection, and the layer will be rendered on top. This is useful for
+ * temporary layers. The standard way to add a layer to a map and have it managed by the map is to
+ * use {@link module:ol/Map#addLayer}.
+ * @property {boolean} [useInterimTilesOnError=true] Use interim tiles on error.
+ */
+
+/**
+ * @classdesc
+ * For layer sources that provide pre-rendered, tiled images in grids that are
+ * organized by zoom levels for specific resolutions.
+ * Note that any property set in the options is set as a {@link module:ol/Object~BaseObject}
+ * property on the layer object; for example, setting `title: 'My Title'` in the
+ * options means that `title` is observable, and has get/set accessors.
+ *
+ * @api
+ */
+var TileLayer =
+/*@__PURE__*/
+function (Layer) {
+  function TileLayer(opt_options) {
+    var options = opt_options ? opt_options : {};
+    var baseOptions = (0, _obj.assign)({}, options);
+    delete baseOptions.preload;
+    delete baseOptions.useInterimTilesOnError;
+    Layer.call(this, baseOptions);
+    this.setPreload(options.preload !== undefined ? options.preload : 0);
+    this.setUseInterimTilesOnError(options.useInterimTilesOnError !== undefined ? options.useInterimTilesOnError : true);
+    /**
+    * The layer type.
+    * @protected
+    * @type {import("../LayerType.js").default}
+    */
+
+    this.type = _LayerType.default.TILE;
+  }
+
+  if (Layer) TileLayer.__proto__ = Layer;
+  TileLayer.prototype = Object.create(Layer && Layer.prototype);
+  TileLayer.prototype.constructor = TileLayer;
+  /**
+  * Return the level as number to which we will preload tiles up to.
+  * @return {number} The level to preload tiles up to.
+  * @observable
+  * @api
+  */
+
+  TileLayer.prototype.getPreload = function getPreload() {
+    return (
+      /** @type {number} */
+      this.get(_TileProperty.default.PRELOAD)
+    );
+  };
+  /**
+  * Set the level as number to which we will preload tiles up to.
+  * @param {number} preload The level to preload tiles up to.
+  * @observable
+  * @api
+  */
+
+
+  TileLayer.prototype.setPreload = function setPreload(preload) {
+    this.set(_TileProperty.default.PRELOAD, preload);
+  };
+  /**
+  * Whether we use interim tiles on error.
+  * @return {boolean} Use interim tiles on error.
+  * @observable
+  * @api
+  */
+
+
+  TileLayer.prototype.getUseInterimTilesOnError = function getUseInterimTilesOnError() {
+    return (
+      /** @type {boolean} */
+      this.get(_TileProperty.default.USE_INTERIM_TILES_ON_ERROR)
+    );
+  };
+  /**
+  * Set whether we use interim tiles on error.
+  * @param {boolean} useInterimTilesOnError Use interim tiles on error.
+  * @observable
+  * @api
+  */
+
+
+  TileLayer.prototype.setUseInterimTilesOnError = function setUseInterimTilesOnError(useInterimTilesOnError) {
+    this.set(_TileProperty.default.USE_INTERIM_TILES_ON_ERROR, useInterimTilesOnError);
+  };
+
+  return TileLayer;
+}(_Layer.default);
+/**
+ * Return the associated {@link module:ol/source/Tile tilesource} of the layer.
+ * @function
+ * @return {import("../source/Tile.js").default} Source.
+ * @api
+ */
+
+
+TileLayer.prototype.getSource;
+var _default = TileLayer; //# sourceMappingURL=Tile.js.map
+
+exports.default = _default;
+},{"../LayerType.js":"swNg","./Layer.js":"8hYy","./TileProperty.js":"84Mk","../obj.js":"lPyT"}],"cgpj":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _LayerType = _interopRequireDefault(require("../LayerType.js"));
+
+var _Layer = _interopRequireDefault(require("./Layer.js"));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/**
+ * @module ol/layer/Image
+ */
+
+/**
+ * @typedef {Object} Options
+ * @property {number} [opacity=1] Opacity (0, 1).
+ * @property {boolean} [visible=true] Visibility.
+ * @property {import("../extent.js").Extent} [extent] The bounding extent for layer rendering.  The layer will not be
+ * rendered outside of this extent.
+ * @property {number} [zIndex] The z-index for layer rendering.  At rendering time, the layers
+ * will be ordered, first by Z-index and then by position. When `undefined`, a `zIndex` of 0 is assumed
+ * for layers that are added to the map's `layers` collection, or `Infinity` when the layer's `setMap()`
+ * method was used.
+ * @property {number} [minResolution] The minimum resolution (inclusive) at which this layer will be
+ * visible.
+ * @property {number} [maxResolution] The maximum resolution (exclusive) below which this layer will
+ * be visible.
+ * @property {import("../PluggableMap.js").default} [map] Sets the layer as overlay on a map. The map will not manage
+ * this layer in its layers collection, and the layer will be rendered on top. This is useful for
+ * temporary layers. The standard way to add a layer to a map and have it managed by the map is to
+ * use {@link module:ol/Map#addLayer}.
+ * @property {import("../source/Image.js").default} [source] Source for this layer.
+ */
+
+/**
+ * @classdesc
+ * Server-rendered images that are available for arbitrary extents and
+ * resolutions.
+ * Note that any property set in the options is set as a {@link module:ol/Object~BaseObject}
+ * property on the layer object; for example, setting `title: 'My Title'` in the
+ * options means that `title` is observable, and has get/set accessors.
+ *
+ * @fires import("../render/Event.js").RenderEvent
+ * @api
+ */
+var ImageLayer =
+/*@__PURE__*/
+function (Layer) {
+  function ImageLayer(opt_options) {
+    var options = opt_options ? opt_options : {};
+    Layer.call(this, options);
+    /**
+     * The layer type.
+     * @protected
+     * @type {import("../LayerType.js").default}
+     */
+
+    this.type = _LayerType.default.IMAGE;
+  }
+
+  if (Layer) ImageLayer.__proto__ = Layer;
+  ImageLayer.prototype = Object.create(Layer && Layer.prototype);
+  ImageLayer.prototype.constructor = ImageLayer;
+  return ImageLayer;
+}(_Layer.default);
+/**
+ * Return the associated {@link module:ol/source/Image source} of the image layer.
+ * @function
+ * @return {import("../source/Image.js").default} Source.
+ * @api
+ */
+
+
+ImageLayer.prototype.getSource;
+var _default = ImageLayer; //# sourceMappingURL=Image.js.map
+
+exports.default = _default;
+},{"../LayerType.js":"swNg","./Layer.js":"8hYy"}],"y5uw":[function(require,module,exports) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -82661,180 +82907,9 @@ ol_source_taskMgr.prototype._project_to_feature = function (p) {
   return feature;
 };
 
-ol_source_taskMgr.prototype._projects_to_collection = function (ps) {
-  return {
-    "type": "FeatureCollection",
-    "features": ps
-  };
-};
-
 var _default = ol_source_taskMgr;
 exports.default = _default;
-},{"ol":"LDxD","ol/format/GeoJSON":"Xkfr","ol/source/Vector":"s9D1","swagger-client":"NEID","./taskmgr_spec_slim":"TC0N"}],"84Mk":[function(require,module,exports) {
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.default = void 0;
-
-/**
- * @module ol/layer/TileProperty
- */
-
-/**
- * @enum {string}
- */
-var _default = {
-  PRELOAD: 'preload',
-  USE_INTERIM_TILES_ON_ERROR: 'useInterimTilesOnError'
-}; //# sourceMappingURL=TileProperty.js.map
-
-exports.default = _default;
-},{}],"tAJs":[function(require,module,exports) {
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.default = void 0;
-
-var _LayerType = _interopRequireDefault(require("../LayerType.js"));
-
-var _Layer = _interopRequireDefault(require("./Layer.js"));
-
-var _TileProperty = _interopRequireDefault(require("./TileProperty.js"));
-
-var _obj = require("../obj.js");
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/**
- * @module ol/layer/Tile
- */
-
-/**
- * @typedef {Object} Options
- * @property {number} [opacity=1] Opacity (0, 1).
- * @property {boolean} [visible=true] Visibility.
- * @property {import("../extent.js").Extent} [extent] The bounding extent for layer rendering.  The layer will not be
- * rendered outside of this extent.
- * @property {number} [zIndex] The z-index for layer rendering.  At rendering time, the layers
- * will be ordered, first by Z-index and then by position. When `undefined`, a `zIndex` of 0 is assumed
- * for layers that are added to the map's `layers` collection, or `Infinity` when the layer's `setMap()`
- * method was used.
- * @property {number} [minResolution] The minimum resolution (inclusive) at which this layer will be
- * visible.
- * @property {number} [maxResolution] The maximum resolution (exclusive) below which this layer will
- * be visible.
- * @property {number} [preload=0] Preload. Load low-resolution tiles up to `preload` levels. `0`
- * means no preloading.
- * @property {import("../source/Tile.js").default} [source] Source for this layer.
- * @property {import("../PluggableMap.js").default} [map] Sets the layer as overlay on a map. The map will not manage
- * this layer in its layers collection, and the layer will be rendered on top. This is useful for
- * temporary layers. The standard way to add a layer to a map and have it managed by the map is to
- * use {@link module:ol/Map#addLayer}.
- * @property {boolean} [useInterimTilesOnError=true] Use interim tiles on error.
- */
-
-/**
- * @classdesc
- * For layer sources that provide pre-rendered, tiled images in grids that are
- * organized by zoom levels for specific resolutions.
- * Note that any property set in the options is set as a {@link module:ol/Object~BaseObject}
- * property on the layer object; for example, setting `title: 'My Title'` in the
- * options means that `title` is observable, and has get/set accessors.
- *
- * @api
- */
-var TileLayer =
-/*@__PURE__*/
-function (Layer) {
-  function TileLayer(opt_options) {
-    var options = opt_options ? opt_options : {};
-    var baseOptions = (0, _obj.assign)({}, options);
-    delete baseOptions.preload;
-    delete baseOptions.useInterimTilesOnError;
-    Layer.call(this, baseOptions);
-    this.setPreload(options.preload !== undefined ? options.preload : 0);
-    this.setUseInterimTilesOnError(options.useInterimTilesOnError !== undefined ? options.useInterimTilesOnError : true);
-    /**
-    * The layer type.
-    * @protected
-    * @type {import("../LayerType.js").default}
-    */
-
-    this.type = _LayerType.default.TILE;
-  }
-
-  if (Layer) TileLayer.__proto__ = Layer;
-  TileLayer.prototype = Object.create(Layer && Layer.prototype);
-  TileLayer.prototype.constructor = TileLayer;
-  /**
-  * Return the level as number to which we will preload tiles up to.
-  * @return {number} The level to preload tiles up to.
-  * @observable
-  * @api
-  */
-
-  TileLayer.prototype.getPreload = function getPreload() {
-    return (
-      /** @type {number} */
-      this.get(_TileProperty.default.PRELOAD)
-    );
-  };
-  /**
-  * Set the level as number to which we will preload tiles up to.
-  * @param {number} preload The level to preload tiles up to.
-  * @observable
-  * @api
-  */
-
-
-  TileLayer.prototype.setPreload = function setPreload(preload) {
-    this.set(_TileProperty.default.PRELOAD, preload);
-  };
-  /**
-  * Whether we use interim tiles on error.
-  * @return {boolean} Use interim tiles on error.
-  * @observable
-  * @api
-  */
-
-
-  TileLayer.prototype.getUseInterimTilesOnError = function getUseInterimTilesOnError() {
-    return (
-      /** @type {boolean} */
-      this.get(_TileProperty.default.USE_INTERIM_TILES_ON_ERROR)
-    );
-  };
-  /**
-  * Set whether we use interim tiles on error.
-  * @param {boolean} useInterimTilesOnError Use interim tiles on error.
-  * @observable
-  * @api
-  */
-
-
-  TileLayer.prototype.setUseInterimTilesOnError = function setUseInterimTilesOnError(useInterimTilesOnError) {
-    this.set(_TileProperty.default.USE_INTERIM_TILES_ON_ERROR, useInterimTilesOnError);
-  };
-
-  return TileLayer;
-}(_Layer.default);
-/**
- * Return the associated {@link module:ol/source/Tile tilesource} of the layer.
- * @function
- * @return {import("../source/Tile.js").default} Source.
- * @api
- */
-
-
-TileLayer.prototype.getSource;
-var _default = TileLayer; //# sourceMappingURL=Tile.js.map
-
-exports.default = _default;
-},{"../LayerType.js":"swNg","./Layer.js":"8hYy","./TileProperty.js":"84Mk","../obj.js":"lPyT"}],"XzS7":[function(require,module,exports) {
+},{"ol":"LDxD","ol/format/GeoJSON":"Xkfr","ol/source/Vector":"s9D1","swagger-client":"NEID","./taskmgr_spec_slim":"TC0N"}],"XzS7":[function(require,module,exports) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -84795,17 +84870,25 @@ exports.default = _default;
 
 var _ol = require("ol");
 
-var _ol_source_taskMgr = _interopRequireDefault(require("./ol_source_taskMgr"));
-
 var _Vector = _interopRequireDefault(require("ol/layer/Vector"));
 
 var _Tile = _interopRequireDefault(require("ol/layer/Tile"));
 
+var _Image = _interopRequireDefault(require("ol/layer/Image"));
+
 var _Vector2 = _interopRequireDefault(require("ol/source/Vector"));
+
+var _ol_source_taskMgr = _interopRequireDefault(require("./ol_source_taskMgr"));
+
+var _XYZ = _interopRequireDefault(require("ol/source/XYZ"));
 
 var _OSM = _interopRequireDefault(require("ol/source/OSM"));
 
 var _GeoJSON = _interopRequireDefault(require("ol/format/GeoJSON"));
+
+var _Fill = _interopRequireDefault(require("ol/style/Fill"));
+
+var _Style = _interopRequireDefault(require("ol/style/Style"));
 
 var _control = require("ol/control");
 
@@ -84818,38 +84901,58 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 // layers
 // sources
 // formats
+// style
 // controls & interactions
 function mapSwazi_map(target, projects) {
   this.bounds = [3427637.922163467, -3163184.323967456, 3577228.0000320906, -2964196.586792509];
-  this.projects = projects; // Get Projects
+  this.projects = projects; // Layers
 
+  var adm0 = new _Vector2.default({
+    url: '/assets/data/adm0_eSwatini.geojson',
+    format: new _GeoJSON.default()
+  });
   var lyrs = {
-    osm: new _Tile.default({
-      source: new _OSM.default()
+    hotosm: new _Tile.default({
+      source: new _XYZ.default({
+        url: "https://{a-c}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
+      })
+    }),
+    bounds_clip: new _Vector.default({
+      source: adm0,
+      renderMode: 'image',
+      style: new _Style.default({
+        fill: new _Fill.default({
+          color: 'white'
+        })
+      })
     }),
     swazi_bounds: new _Vector.default({
-      source: new _Vector2.default({
-        url: '/assets/data/adm0_eSwatini.geojson',
-        format: new _GeoJSON.default()
-      })
+      source: adm0
     }),
     taskmgr: new _Vector.default({
       source: new _ol_source_taskMgr.default({
         projects: projects
       })
     })
-  }; // event listeners
+  }; // https://gis.stackexchange.com/questions/185881/clipping-tilelayer-with-georeferenced-polygon-clipping-mask/239136
 
-  lyrs['taskmgr'].getSource().addEventListener('project_loaded', function (e) {
-    console.log(["LOADED", e]);
+  lyrs['bounds_clip'].on('precompose', function (e) {
+    e.context.globalCompositeOperation = 'destination-in';
   });
+  lyrs['bounds_clip'].on('postcompose', function (e) {
+    e.context.globalCompositeOperation = 'source-over';
+  }); // event listeners
+
+  var self = this;
   lyrs['taskmgr'].getSource().addEventListener('projects_loaded', function (e) {
-    console.log(["ALL LOADED", e]);
+    self.dispatchEvent({
+      type: 'projects_loaded'
+    });
   }); // Initialize
 
   var call_opts = {
     target: target,
-    layers: [lyrs.osm, lyrs.swazi_bounds, lyrs.taskmgr],
+    layers: [lyrs.hotosm, lyrs.swazi_bounds, lyrs.taskmgr, lyrs.bounds_clip],
     view: this.get_fitted_view(target, this.bounds),
     interactions: (0, _interaction.defaults)(),
     controls: (0, _control.defaults)()
@@ -84876,7 +84979,7 @@ mapSwazi_map.prototype.get_fitted_view = function (target, bounds) {
 };
 
 module.exports = mapSwazi_map;
-},{"ol":"LDxD","./ol_source_taskMgr":"0zjt","ol/layer/Vector":"BGzd","ol/layer/Tile":"tAJs","ol/source/Vector":"s9D1","ol/source/OSM":"pFtY","ol/format/GeoJSON":"Xkfr","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"/vRa":[function(require,module,exports) {
+},{"ol":"LDxD","ol/layer/Vector":"BGzd","ol/layer/Tile":"tAJs","ol/layer/Image":"cgpj","ol/source/Vector":"s9D1","./ol_source_taskMgr":"0zjt","ol/source/XYZ":"4e4W","ol/source/OSM":"pFtY","ol/format/GeoJSON":"Xkfr","ol/style/Fill":"wPtA","ol/style/Style":"ERCw","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"/vRa":[function(require,module,exports) {
 "use strict";
 
 var _mapSwazi_map = _interopRequireDefault(require("./mapSwazi_map"));
@@ -84888,7 +84991,10 @@ document.addEventListener("DOMContentLoaded", function () {
   // Projects map
   //
   document.querySelectorAll("#projects-map").forEach(function (pm) {
-    window.mapSwazi_map = new _mapSwazi_map.default(pm, [6204]);
+    window.mapSwazi_map = new _mapSwazi_map.default(pm, [6209]);
+    window.mapSwazi_map.addEventListener('projects_loaded', function () {
+      console.log("PROJECTS ALL LOADED SKO BUFFS");
+    });
   });
 });
 },{"./mapSwazi_map":"BjXR"}]},{},["/vRa"], null)
