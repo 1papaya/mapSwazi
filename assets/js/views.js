@@ -20,6 +20,25 @@ function SwaziView(target, padding=10) {
 
 inherits(SwaziView, View);
 
+function LayerView(lyr, target, padding=5) {
+    const bounds = lyr.getSource().getExtent();
+
+    View.call(this, {
+        extent: bounds
+    });
+
+    this.fit(bounds, {
+        size: [target.offsetHeight, target.offsetWidth],
+        padding: [padding, padding, padding, padding],
+        constrainResolution: false
+    });
+
+    this.setMinZoom(this.getZoom() - 1);
+}
+
+inherits(LayerView, View);
+
 module.exports = {
-    SwaziView: SwaziView
+    SwaziView: SwaziView,
+    LayerView: LayerView
 };

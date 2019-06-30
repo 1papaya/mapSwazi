@@ -59458,8 +59458,27 @@ function SwaziView(target) {
 }
 
 (0, _ol.inherits)(SwaziView, _ol.View);
+
+function LayerView(lyr, target) {
+  var padding = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 5;
+  var bounds = lyr.getSource().getExtent();
+
+  _ol.View.call(this, {
+    extent: bounds
+  });
+
+  this.fit(bounds, {
+    size: [target.offsetHeight, target.offsetWidth],
+    padding: [padding, padding, padding, padding],
+    constrainResolution: false
+  });
+  this.setMinZoom(this.getZoom() - 1);
+}
+
+(0, _ol.inherits)(LayerView, _ol.View);
 module.exports = {
-  SwaziView: SwaziView
+  SwaziView: SwaziView,
+  LayerView: LayerView
 };
 },{"ol":"LDxD"}],"84Mk":[function(require,module,exports) {
 "use strict";
@@ -85031,12 +85050,20 @@ function project_map(target, project) {
   console.log([target, project]); // Layers
 
   var taskMgr = new _Vector.default({
+    name: "project",
     source: new _TaskMgr.default({
       projects: [project]
     })
   });
   var self = this;
-  taskMgr.getSource().addEventListener('projects_loaded', function (e) {//self.dispatchEvent({ type: 'projects_loaded' });
+  taskMgr.getSource().addEventListener('projects_loaded', function (e) {
+    var p_lyr = self.getLayerByName("project");
+    var p_el = self.getTargetElement();
+    var p_view = new _views.LayerView(p_lyr, p_el);
+    self.getView().animate({
+      center: p_view.getCenter(),
+      zoom: p_view.getZoom()
+    });
   }); // Initialize
 
   var call_opts = {
@@ -85052,6 +85079,15 @@ function project_map(target, project) {
 
 ;
 (0, _ol.inherits)(project_map, _ol.Map);
+
+project_map.prototype.getLayerByName = function (name) {
+  var lyr = false;
+  this.getLayers().forEach(function (l) {
+    if (l.get("name") == name) lyr = l;
+  });
+  return lyr;
+};
+
 module.exports = project_map;
 },{"ol":"LDxD","../views":"tbdy","../layers":"QN0b","ol/layer/Vector":"BGzd","../source/TaskMgr":"Z3Lv","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"/vRa":[function(require,module,exports) {
 "use strict";

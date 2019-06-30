@@ -6,19 +6,23 @@ permalink: /projects
 ---
 
 <div id="tasks" class="container">
+
     <div class="columns">
         <div class="column">
             <div class="overview-map" data-projects="{{ site.data.projects | map: 'id' | jsonify }}"></div>
         </div>
     </div>
-    
 
     <div class="columns is-multiline">
         {% for proj in site.data.projects %}
         <div class="column is-6">
             <div class="content project">
                 <div class="hrheading">
-                    <span>{{ proj.name }}</span>
+                    <span>
+                        <a href="https://tasks.hotosm.org/project/{{ proj.id }}/dashboard">
+                            {{ proj.name }}
+                        </a>
+                    </span>
                 </div>
                 <div class="is-size-6 has-text-centered desc">
                     {{ proj.desc }}
