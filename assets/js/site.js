@@ -59454,7 +59454,7 @@ function SwaziView(target) {
     padding: [padding, padding, padding, padding],
     constrainResolution: false
   });
-  this.setMinZoom(this.getZoom());
+  this.setMinZoom(this.getZoom() - 1);
 }
 
 (0, _ol.inherits)(SwaziView, _ol.View);

@@ -1,6 +1,17 @@
 [
     {
         "id": 6209,
-        "name": "River Crossings #1"
+        "name": "Highveld Waterways #1",
+        "desc": "Mapping tributaries and major rivers in Highveld inkhundlas."
+    },
+    {
+        "id": 6204,
+        "name": "Hhukwini Roads & Paths",
+        "desc": "Mapping roads in paths in Hhukwini Inkhundla, Hhohho"
+    },
+    {
+        "id": 6207,
+        "name": "Maphalaleni Roads & Paths",
+        "desc": "Mapping roads & paths in Hhukwini Inkhundla, Manzini"
     }
 ]

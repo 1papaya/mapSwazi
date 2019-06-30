@@ -7,26 +7,45 @@ permalink: /projects
 
 <div id="tasks" class="container">
     <div class="columns">
-        <div class="column is-two-thirds">
+        <div class="column">
             <div class="overview-map" data-projects="{{ site.data.projects | map: 'id' | jsonify }}"></div>
         </div>
-        <div class="column is-one-third">
-            <div class="hrheading">
-                <span>active projects</span>
-            </div>
-            <div class="content">
-                list of active tasks goes here
-            </div>
-        </div>
     </div>
+    
 
-    <div class="columns">
+    <div class="columns is-multiline">
         {% for proj in site.data.projects %}
-        <div class="column is-4">
-            <div class="project-map" data-project="{{ proj.id }}"></div>
-        </div>
-        <div class="column is-2 >
-            <div class="heading is-4">{{ proj.name }}</div>
+        <div class="column is-6">
+            <div class="content project">
+                <div class="hrheading">
+                    <span>{{ proj.name }}</span>
+                </div>
+                <div class="is-size-6 has-text-centered desc">
+                    {{ proj.desc }}
+                </div>
+                <div class="project-map" data-project="{{ proj.id }}"></div>
+
+                <nav class="level is-mobile stats">
+                    <div class="level-item has-text-centered">
+                        <div>
+                            <div class="heading">mapped</div>
+                            <div class="title mapped">-%</div>
+                        </div>
+                    </div>
+                    <div class="level-item has-text-centered">
+                        <div>
+                            <div class="heading">validated</div>
+                            <div class="title validated">-%</div>
+                        </div>
+                    </div>
+                    <div class="level-item has-text-centered">
+                        <div>
+                            <div class="heading">area</div>
+                            <div class="title sqkm">-km</div>
+                        </div>
+                    </div>
+                </nav>
+            </div>
         </div>
         {% endfor %}
         <div class="column"></div>

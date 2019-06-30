@@ -15,7 +15,7 @@ function SwaziView(target, padding=10) {
         constrainResolution: false
     });
 
-    this.setMinZoom(this.getZoom());
+    this.setMinZoom(this.getZoom() - 1);
 }
 
 inherits(SwaziView, View);
