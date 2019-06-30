@@ -27,10 +27,10 @@ $dimensions: 256;
 //@import "../../node_modules/plyr/src/sass/plyr.scss";
 
 //
-// Leaflet
+// OL
 //
 
-@import "./leaflet.scss";
+@import "./ol.scss";
 
 
 //
@@ -208,6 +208,10 @@ footer {
 // Leaflet
 //
 
-#projects-map {
-    height: 510px;
+.overview-map {
+    min-height: 510px;
+}
+
+.project-map {
+    min-height: 190px;
 }

@@ -8,7 +8,7 @@ permalink: /projects
 <div id="tasks" class="container">
     <div class="columns">
         <div class="column is-two-thirds">
-            <div id="projects-map"></div>
+            <div class="overview-map" data-projects="{{ site.data.projects | map: 'id' | jsonify }}"></div>
         </div>
         <div class="column is-one-third">
             <div class="hrheading">
@@ -21,17 +21,14 @@ permalink: /projects
     </div>
 
     <div class="columns">
-        <div class="column">
-            sko
+        {% for proj in site.data.projects %}
+        <div class="column is-4">
+            <div class="project-map" data-project="{{ proj.id }}"></div>
         </div>
-        <div class="column is-one-fifth">
-            buffs
+        <div class="column is-2 >
+            <div class="heading is-4">{{ proj.name }}</div>
         </div>
-        <div class="column">
-            skobuf
-        </div>
-        <div class="column is-one-fifth">
-            lulz
-        </div>
+        {% endfor %}
+        <div class="column"></div>
     </div>
 </div>

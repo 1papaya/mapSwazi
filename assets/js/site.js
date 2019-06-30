@@ -85003,22 +85003,83 @@ function overview_map(target, projects) {
 ;
 (0, _ol.inherits)(overview_map, _ol.Map);
 module.exports = overview_map;
+},{"ol":"LDxD","../views":"tbdy","../layers":"QN0b","ol/layer/Vector":"BGzd","../source/TaskMgr":"Z3Lv","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"7/A3":[function(require,module,exports) {
+"use strict";
+
+var _ol = require("ol");
+
+var _views = require("../views");
+
+var _layers = _interopRequireDefault(require("../layers"));
+
+var _Vector = _interopRequireDefault(require("ol/layer/Vector"));
+
+var _TaskMgr = _interopRequireDefault(require("../source/TaskMgr"));
+
+var _control = require("ol/control");
+
+var _interaction = require("ol/interaction");
+
+var _Select = _interopRequireDefault(require("ol/interaction/Select"));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+// views
+// layers
+// controls & interactions
+function project_map(target, project) {
+  console.log([target, project]); // Layers
+
+  var taskMgr = new _Vector.default({
+    source: new _TaskMgr.default({
+      projects: [project]
+    })
+  });
+  var self = this;
+  taskMgr.getSource().addEventListener('projects_loaded', function (e) {//self.dispatchEvent({ type: 'projects_loaded' });
+  }); // Initialize
+
+  var call_opts = {
+    target: target,
+    layers: [_layers.default.hotosm, taskMgr, _layers.default.bounds_clip],
+    view: new _views.SwaziView(target),
+    interactions: (0, _interaction.defaults)(),
+    controls: (0, _control.defaults)()
+  };
+
+  _ol.Map.call(this, call_opts);
+}
+
+;
+(0, _ol.inherits)(project_map, _ol.Map);
+module.exports = project_map;
 },{"ol":"LDxD","../views":"tbdy","../layers":"QN0b","ol/layer/Vector":"BGzd","../source/TaskMgr":"Z3Lv","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"/vRa":[function(require,module,exports) {
 "use strict";
 
 var _overview = _interopRequireDefault(require("./map/overview"));
 
+var _project = _interopRequireDefault(require("./map/project"));
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 document.addEventListener("DOMContentLoaded", function () {
+  window.overview_maps = [];
+  window.project_maps = []; // Overview map
   //
-  // Projects map
-  //
-  document.querySelectorAll("#projects-map").forEach(function (pm) {
-    window.overview_map = new _overview.default(pm, []);
-    window.overview_map.addEventListener('projects_loaded', function () {
+
+  document.querySelectorAll(".overview-map").forEach(function (om) {
+    var projs = JSON.parse(om.dataset.projects);
+    var o_map = new _overview.default(om, projs);
+    o_map.addEventListener('projects_loaded', function () {
       console.log("PROJECTS ALL LOADED SKO BUFFS");
     });
+    window.overview_maps.push(o_map);
+  }); // Projects maps
+  //
+
+  document.querySelectorAll(".project-map").forEach(function (pm) {
+    var p_map = new _project.default(pm, pm.dataset.project);
+    window.project_maps.push(p_map);
   });
 });
-},{"./map/overview":"6HCp"}]},{},["/vRa"], null)
+},{"./map/overview":"6HCp","./map/project":"7/A3"}]},{},["/vRa"], null)
