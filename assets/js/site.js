@@ -84943,7 +84943,6 @@ ol_source_taskMgr.prototype._loader = function (extent, resolution, projection) 
 
 ol_source_taskMgr.prototype._project_loaded = function (p_data, projection) {
   this._projects_loaded = this._projects_loaded + 1;
-  console.log(p_data);
   var features = [];
   var _iteratorNormalCompletion2 = true;
   var _didIteratorError2 = false;
@@ -84981,8 +84980,6 @@ ol_source_taskMgr.prototype._project_loaded = function (p_data, projection) {
     type: 'projects_loaded'
   });
 };
-
-ol_source_taskMgr.prototype._tasks_to_features = function (ts) {};
 
 ol_source_taskMgr.prototype._project_to_feature = function (p) {
   var p_copy = Object.assign({}, p);
@@ -85047,7 +85044,51 @@ function overview_map(target, projects) {
 ;
 (0, _ol.inherits)(overview_map, _ol.Map);
 module.exports = overview_map;
-},{"ol":"LDxD","../views":"tbdy","../layers":"QN0b","ol/layer/Vector":"BGzd","../source/TaskMgr":"Z3Lv","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"7/A3":[function(require,module,exports) {
+},{"ol":"LDxD","../views":"tbdy","../layers":"QN0b","ol/layer/Vector":"BGzd","../source/TaskMgr":"Z3Lv","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"XEZO":[function(require,module,exports) {
+"use strict";
+
+var _Style = _interopRequireDefault(require("ol/style/Style"));
+
+var _Fill = _interopRequireDefault(require("ol/style/Fill"));
+
+var _Stroke = _interopRequireDefault(require("ol/style/Stroke"));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+//
+// Taskmgr styles
+var statuses = {
+  "READY": [255, 0, 0, 0],
+  "MAPPED": [255, 198, 12, 0.4],
+  "VALIDATED": [0, 128, 0, 0.4]
+};
+var taskmgr_sty = new _Style.default({
+  fill: new _Fill.default({
+    color: [255, 255, 255, 0.5]
+  }),
+  stroke: new _Stroke.default({
+    color: [100, 100, 100, 0.6],
+    width: 1
+  })
+});
+
+var taskmgr_fn = function taskmgr_fn(feature, resolution) {
+  var status = feature.get("taskStatus");
+  console.log(feature);
+
+  if (status in statuses) {
+    taskmgr_sty.setFill(new _Fill.default({
+      color: statuses[status]
+    }));
+  }
+
+  return [taskmgr_sty];
+};
+
+module.exports = {
+  taskmgr: taskmgr_fn
+};
+},{"ol/style/Style":"ERCw","ol/style/Fill":"wPtA","ol/style/Stroke":"v50a"}],"7/A3":[function(require,module,exports) {
 "use strict";
 
 var _ol = require("ol");
@@ -85060,6 +85101,8 @@ var _Vector = _interopRequireDefault(require("ol/layer/Vector"));
 
 var _TaskMgr = _interopRequireDefault(require("../source/TaskMgr"));
 
+var _styles = _interopRequireDefault(require("../styles"));
+
 var _control = require("ol/control");
 
 var _interaction = require("ol/interaction");
@@ -85070,16 +85113,18 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 // views
 // layers
+// styles
 // controls & interactions
 function project_map(target, project) {
-  console.log([target, project]); // Layers
-
+  // Layers
   var taskMgr = new _Vector.default({
     name: "project",
     source: new _TaskMgr.default({
       projects: [project]
-    })
-  });
+    }),
+    style: _styles.default.taskmgr
+  }); // Zoom to tasking layer on load
+
   var self = this;
   taskMgr.getSource().addEventListener('projects_loaded', function (e) {
     var p_lyr = self.getLayerByName("project");
@@ -85115,7 +85160,7 @@ project_map.prototype.getLayerByName = function (name) {
 };
 
 module.exports = project_map;
-},{"ol":"LDxD","../views":"tbdy","../layers":"QN0b","ol/layer/Vector":"BGzd","../source/TaskMgr":"Z3Lv","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"/vRa":[function(require,module,exports) {
+},{"ol":"LDxD","../views":"tbdy","../layers":"QN0b","ol/layer/Vector":"BGzd","../source/TaskMgr":"Z3Lv","../styles":"XEZO","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"/vRa":[function(require,module,exports) {
 "use strict";
 
 var _overview = _interopRequireDefault(require("./map/overview"));

@@ -8,6 +8,9 @@ import lyrs from '../layers';
 import VectorLayer from 'ol/layer/Vector';
 import TaskMgrSource from '../source/TaskMgr';
 
+// styles
+import stys from '../styles';
+
 // controls & interactions
 import {defaults as defaultsControl, FullScreen, OverviewMap} from 'ol/control';
 import {defaults as defaultsInteraction} from 'ol/interaction';
@@ -15,16 +18,16 @@ import Select from 'ol/interaction/Select';
 
 function project_map(target, project) {
 
-    console.log([target, project]);
-
     // Layers
     var taskMgr = new VectorLayer({
         name: "project",
         source: new TaskMgrSource({
             projects: [project]
-        })
+        }),
+        style: stys.taskmgr
     });
 
+    // Zoom to tasking layer on load
     var self = this;
     taskMgr.getSource().addEventListener('projects_loaded',
                                          function(e) {

@@ -59,9 +59,6 @@ ol_source_taskMgr.prototype._project_loaded = function(p_data, projection) {
         this.dispatchEvent({ type: 'projects_loaded' });
 };
 
-ol_source_taskMgr.prototype._tasks_to_features = function(ts) {
-    
-};
 
 ol_source_taskMgr.prototype._project_to_feature = function(p) {
     var p_copy = Object.assign({}, p);
