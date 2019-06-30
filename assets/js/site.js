@@ -59682,7 +59682,1963 @@ ImageLayer.prototype.getSource;
 var _default = ImageLayer; //# sourceMappingURL=Image.js.map
 
 exports.default = _default;
-},{"../LayerType.js":"swNg","./Layer.js":"8hYy"}],"y5uw":[function(require,module,exports) {
+},{"../LayerType.js":"swNg","./Layer.js":"8hYy"}],"XzS7":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.calculateSourceResolution = calculateSourceResolution;
+exports.render = render;
+
+var _dom = require("./dom.js");
+
+var _extent = require("./extent.js");
+
+var _math = require("./math.js");
+
+var _proj = require("./proj.js");
+
+/**
+ * @module ol/reproj
+ */
+
+/**
+ * Calculates ideal resolution to use from the source in order to achieve
+ * pixel mapping as close as possible to 1:1 during reprojection.
+ * The resolution is calculated regardless of what resolutions
+ * are actually available in the dataset (TileGrid, Image, ...).
+ *
+ * @param {import("./proj/Projection.js").default} sourceProj Source projection.
+ * @param {import("./proj/Projection.js").default} targetProj Target projection.
+ * @param {import("./coordinate.js").Coordinate} targetCenter Target center.
+ * @param {number} targetResolution Target resolution.
+ * @return {number} The best resolution to use. Can be +-Infinity, NaN or 0.
+ */
+function calculateSourceResolution(sourceProj, targetProj, targetCenter, targetResolution) {
+  var sourceCenter = (0, _proj.transform)(targetCenter, targetProj, sourceProj); // calculate the ideal resolution of the source data
+
+  var sourceResolution = (0, _proj.getPointResolution)(targetProj, targetResolution, targetCenter);
+  var targetMetersPerUnit = targetProj.getMetersPerUnit();
+
+  if (targetMetersPerUnit !== undefined) {
+    sourceResolution *= targetMetersPerUnit;
+  }
+
+  var sourceMetersPerUnit = sourceProj.getMetersPerUnit();
+
+  if (sourceMetersPerUnit !== undefined) {
+    sourceResolution /= sourceMetersPerUnit;
+  } // Based on the projection properties, the point resolution at the specified
+  // coordinates may be slightly different. We need to reverse-compensate this
+  // in order to achieve optimal results.
+
+
+  var sourceExtent = sourceProj.getExtent();
+
+  if (!sourceExtent || (0, _extent.containsCoordinate)(sourceExtent, sourceCenter)) {
+    var compensationFactor = (0, _proj.getPointResolution)(sourceProj, sourceResolution, sourceCenter) / sourceResolution;
+
+    if (isFinite(compensationFactor) && compensationFactor > 0) {
+      sourceResolution /= compensationFactor;
+    }
+  }
+
+  return sourceResolution;
+}
+/**
+ * Enlarge the clipping triangle point by 1 pixel to ensure the edges overlap
+ * in order to mask gaps caused by antialiasing.
+ *
+ * @param {number} centroidX Centroid of the triangle (x coordinate in pixels).
+ * @param {number} centroidY Centroid of the triangle (y coordinate in pixels).
+ * @param {number} x X coordinate of the point (in pixels).
+ * @param {number} y Y coordinate of the point (in pixels).
+ * @return {import("./coordinate.js").Coordinate} New point 1 px farther from the centroid.
+ */
+
+
+function enlargeClipPoint(centroidX, centroidY, x, y) {
+  var dX = x - centroidX;
+  var dY = y - centroidY;
+  var distance = Math.sqrt(dX * dX + dY * dY);
+  return [Math.round(x + dX / distance), Math.round(y + dY / distance)];
+}
+/**
+ * Renders the source data into new canvas based on the triangulation.
+ *
+ * @param {number} width Width of the canvas.
+ * @param {number} height Height of the canvas.
+ * @param {number} pixelRatio Pixel ratio.
+ * @param {number} sourceResolution Source resolution.
+ * @param {import("./extent.js").Extent} sourceExtent Extent of the data source.
+ * @param {number} targetResolution Target resolution.
+ * @param {import("./extent.js").Extent} targetExtent Target extent.
+ * @param {import("./reproj/Triangulation.js").default} triangulation
+ * Calculated triangulation.
+ * @param {Array<{extent: import("./extent.js").Extent,
+ *                 image: (HTMLCanvasElement|HTMLImageElement|HTMLVideoElement)}>} sources
+ * Array of sources.
+ * @param {number} gutter Gutter of the sources.
+ * @param {boolean=} opt_renderEdges Render reprojection edges.
+ * @return {HTMLCanvasElement} Canvas with reprojected data.
+ */
+
+
+function render(width, height, pixelRatio, sourceResolution, sourceExtent, targetResolution, targetExtent, triangulation, sources, gutter, opt_renderEdges) {
+  var context = (0, _dom.createCanvasContext2D)(Math.round(pixelRatio * width), Math.round(pixelRatio * height));
+
+  if (sources.length === 0) {
+    return context.canvas;
+  }
+
+  context.scale(pixelRatio, pixelRatio);
+  var sourceDataExtent = (0, _extent.createEmpty)();
+  sources.forEach(function (src, i, arr) {
+    (0, _extent.extend)(sourceDataExtent, src.extent);
+  });
+  var canvasWidthInUnits = (0, _extent.getWidth)(sourceDataExtent);
+  var canvasHeightInUnits = (0, _extent.getHeight)(sourceDataExtent);
+  var stitchContext = (0, _dom.createCanvasContext2D)(Math.round(pixelRatio * canvasWidthInUnits / sourceResolution), Math.round(pixelRatio * canvasHeightInUnits / sourceResolution));
+  var stitchScale = pixelRatio / sourceResolution;
+  sources.forEach(function (src, i, arr) {
+    var xPos = src.extent[0] - sourceDataExtent[0];
+    var yPos = -(src.extent[3] - sourceDataExtent[3]);
+    var srcWidth = (0, _extent.getWidth)(src.extent);
+    var srcHeight = (0, _extent.getHeight)(src.extent);
+    stitchContext.drawImage(src.image, gutter, gutter, src.image.width - 2 * gutter, src.image.height - 2 * gutter, xPos * stitchScale, yPos * stitchScale, srcWidth * stitchScale, srcHeight * stitchScale);
+  });
+  var targetTopLeft = (0, _extent.getTopLeft)(targetExtent);
+  triangulation.getTriangles().forEach(function (triangle, i, arr) {
+    /* Calculate affine transform (src -> dst)
+     * Resulting matrix can be used to transform coordinate
+     * from `sourceProjection` to destination pixels.
+     *
+     * To optimize number of context calls and increase numerical stability,
+     * we also do the following operations:
+     * trans(-topLeftExtentCorner), scale(1 / targetResolution), scale(1, -1)
+     * here before solving the linear system so [ui, vi] are pixel coordinates.
+     *
+     * Src points: xi, yi
+     * Dst points: ui, vi
+     * Affine coefficients: aij
+     *
+     * | x0 y0 1  0  0 0 |   |a00|   |u0|
+     * | x1 y1 1  0  0 0 |   |a01|   |u1|
+     * | x2 y2 1  0  0 0 | x |a02| = |u2|
+     * |  0  0 0 x0 y0 1 |   |a10|   |v0|
+     * |  0  0 0 x1 y1 1 |   |a11|   |v1|
+     * |  0  0 0 x2 y2 1 |   |a12|   |v2|
+     */
+    var source = triangle.source;
+    var target = triangle.target;
+    var x0 = source[0][0],
+        y0 = source[0][1];
+    var x1 = source[1][0],
+        y1 = source[1][1];
+    var x2 = source[2][0],
+        y2 = source[2][1];
+    var u0 = (target[0][0] - targetTopLeft[0]) / targetResolution;
+    var v0 = -(target[0][1] - targetTopLeft[1]) / targetResolution;
+    var u1 = (target[1][0] - targetTopLeft[0]) / targetResolution;
+    var v1 = -(target[1][1] - targetTopLeft[1]) / targetResolution;
+    var u2 = (target[2][0] - targetTopLeft[0]) / targetResolution;
+    var v2 = -(target[2][1] - targetTopLeft[1]) / targetResolution; // Shift all the source points to improve numerical stability
+    // of all the subsequent calculations. The [x0, y0] is used here.
+    // This is also used to simplify the linear system.
+
+    var sourceNumericalShiftX = x0;
+    var sourceNumericalShiftY = y0;
+    x0 = 0;
+    y0 = 0;
+    x1 -= sourceNumericalShiftX;
+    y1 -= sourceNumericalShiftY;
+    x2 -= sourceNumericalShiftX;
+    y2 -= sourceNumericalShiftY;
+    var augmentedMatrix = [[x1, y1, 0, 0, u1 - u0], [x2, y2, 0, 0, u2 - u0], [0, 0, x1, y1, v1 - v0], [0, 0, x2, y2, v2 - v0]];
+    var affineCoefs = (0, _math.solveLinearSystem)(augmentedMatrix);
+
+    if (!affineCoefs) {
+      return;
+    }
+
+    context.save();
+    context.beginPath();
+    var centroidX = (u0 + u1 + u2) / 3;
+    var centroidY = (v0 + v1 + v2) / 3;
+    var p0 = enlargeClipPoint(centroidX, centroidY, u0, v0);
+    var p1 = enlargeClipPoint(centroidX, centroidY, u1, v1);
+    var p2 = enlargeClipPoint(centroidX, centroidY, u2, v2);
+    context.moveTo(p1[0], p1[1]);
+    context.lineTo(p0[0], p0[1]);
+    context.lineTo(p2[0], p2[1]);
+    context.clip();
+    context.transform(affineCoefs[0], affineCoefs[2], affineCoefs[1], affineCoefs[3], u0, v0);
+    context.translate(sourceDataExtent[0] - sourceNumericalShiftX, sourceDataExtent[3] - sourceNumericalShiftY);
+    context.scale(sourceResolution / pixelRatio, -sourceResolution / pixelRatio);
+    context.drawImage(stitchContext.canvas, 0, 0);
+    context.restore();
+  });
+
+  if (opt_renderEdges) {
+    context.save();
+    context.strokeStyle = 'black';
+    context.lineWidth = 1;
+    triangulation.getTriangles().forEach(function (triangle, i, arr) {
+      var target = triangle.target;
+      var u0 = (target[0][0] - targetTopLeft[0]) / targetResolution;
+      var v0 = -(target[0][1] - targetTopLeft[1]) / targetResolution;
+      var u1 = (target[1][0] - targetTopLeft[0]) / targetResolution;
+      var v1 = -(target[1][1] - targetTopLeft[1]) / targetResolution;
+      var u2 = (target[2][0] - targetTopLeft[0]) / targetResolution;
+      var v2 = -(target[2][1] - targetTopLeft[1]) / targetResolution;
+      context.beginPath();
+      context.moveTo(u1, v1);
+      context.lineTo(u0, v0);
+      context.lineTo(u2, v2);
+      context.closePath();
+      context.stroke();
+    });
+    context.restore();
+  }
+
+  return context.canvas;
+} //# sourceMappingURL=reproj.js.map
+},{"./dom.js":"N5LR","./extent.js":"pbFF","./math.js":"cgU2","./proj.js":"bkYg"}],"nSx6":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _extent = require("../extent.js");
+
+var _math = require("../math.js");
+
+var _proj = require("../proj.js");
+
+/**
+ * @module ol/reproj/Triangulation
+ */
+
+/**
+ * Single triangle; consists of 3 source points and 3 target points.
+ * @typedef {Object} Triangle
+ * @property {Array<import("../coordinate.js").Coordinate>} source
+ * @property {Array<import("../coordinate.js").Coordinate>} target
+ */
+
+/**
+ * Maximum number of subdivision steps during raster reprojection triangulation.
+ * Prevents high memory usage and large number of proj4 calls (for certain
+ * transformations and areas). At most `2*(2^this)` triangles are created for
+ * each triangulated extent (tile/image).
+ * @type {number}
+ */
+var MAX_SUBDIVISION = 10;
+/**
+ * Maximum allowed size of triangle relative to world width. When transforming
+ * corners of world extent between certain projections, the resulting
+ * triangulation seems to have zero error and no subdivision is performed. If
+ * the triangle width is more than this (relative to world width; 0-1),
+ * subdivison is forced (up to `MAX_SUBDIVISION`). Default is `0.25`.
+ * @type {number}
+ */
+
+var MAX_TRIANGLE_WIDTH = 0.25;
+/**
+ * @classdesc
+ * Class containing triangulation of the given target extent.
+ * Used for determining source data and the reprojection itself.
+ */
+
+var Triangulation = function Triangulation(sourceProj, targetProj, targetExtent, maxSourceExtent, errorThreshold) {
+  /**
+   * @type {import("../proj/Projection.js").default}
+   * @private
+   */
+  this.sourceProj_ = sourceProj;
+  /**
+   * @type {import("../proj/Projection.js").default}
+   * @private
+   */
+
+  this.targetProj_ = targetProj;
+  /** @type {!Object<string, import("../coordinate.js").Coordinate>} */
+
+  var transformInvCache = {};
+  var transformInv = (0, _proj.getTransform)(this.targetProj_, this.sourceProj_);
+  /**
+   * @param {import("../coordinate.js").Coordinate} c A coordinate.
+   * @return {import("../coordinate.js").Coordinate} Transformed coordinate.
+   * @private
+   */
+
+  this.transformInv_ = function (c) {
+    var key = c[0] + '/' + c[1];
+
+    if (!transformInvCache[key]) {
+      transformInvCache[key] = transformInv(c);
+    }
+
+    return transformInvCache[key];
+  };
+  /**
+   * @type {import("../extent.js").Extent}
+   * @private
+   */
+
+
+  this.maxSourceExtent_ = maxSourceExtent;
+  /**
+   * @type {number}
+   * @private
+   */
+
+  this.errorThresholdSquared_ = errorThreshold * errorThreshold;
+  /**
+   * @type {Array<Triangle>}
+   * @private
+   */
+
+  this.triangles_ = [];
+  /**
+   * Indicates that the triangulation crosses edge of the source projection.
+   * @type {boolean}
+   * @private
+   */
+
+  this.wrapsXInSource_ = false;
+  /**
+   * @type {boolean}
+   * @private
+   */
+
+  this.canWrapXInSource_ = this.sourceProj_.canWrapX() && !!maxSourceExtent && !!this.sourceProj_.getExtent() && (0, _extent.getWidth)(maxSourceExtent) == (0, _extent.getWidth)(this.sourceProj_.getExtent());
+  /**
+   * @type {?number}
+   * @private
+   */
+
+  this.sourceWorldWidth_ = this.sourceProj_.getExtent() ? (0, _extent.getWidth)(this.sourceProj_.getExtent()) : null;
+  /**
+   * @type {?number}
+   * @private
+   */
+
+  this.targetWorldWidth_ = this.targetProj_.getExtent() ? (0, _extent.getWidth)(this.targetProj_.getExtent()) : null;
+  var destinationTopLeft = (0, _extent.getTopLeft)(targetExtent);
+  var destinationTopRight = (0, _extent.getTopRight)(targetExtent);
+  var destinationBottomRight = (0, _extent.getBottomRight)(targetExtent);
+  var destinationBottomLeft = (0, _extent.getBottomLeft)(targetExtent);
+  var sourceTopLeft = this.transformInv_(destinationTopLeft);
+  var sourceTopRight = this.transformInv_(destinationTopRight);
+  var sourceBottomRight = this.transformInv_(destinationBottomRight);
+  var sourceBottomLeft = this.transformInv_(destinationBottomLeft);
+  this.addQuad_(destinationTopLeft, destinationTopRight, destinationBottomRight, destinationBottomLeft, sourceTopLeft, sourceTopRight, sourceBottomRight, sourceBottomLeft, MAX_SUBDIVISION);
+
+  if (this.wrapsXInSource_) {
+    var leftBound = Infinity;
+    this.triangles_.forEach(function (triangle, i, arr) {
+      leftBound = Math.min(leftBound, triangle.source[0][0], triangle.source[1][0], triangle.source[2][0]);
+    }); // Shift triangles to be as close to `leftBound` as possible
+    // (if the distance is more than `worldWidth / 2` it can be closer.
+
+    this.triangles_.forEach(function (triangle) {
+      if (Math.max(triangle.source[0][0], triangle.source[1][0], triangle.source[2][0]) - leftBound > this.sourceWorldWidth_ / 2) {
+        var newTriangle = [[triangle.source[0][0], triangle.source[0][1]], [triangle.source[1][0], triangle.source[1][1]], [triangle.source[2][0], triangle.source[2][1]]];
+
+        if (newTriangle[0][0] - leftBound > this.sourceWorldWidth_ / 2) {
+          newTriangle[0][0] -= this.sourceWorldWidth_;
+        }
+
+        if (newTriangle[1][0] - leftBound > this.sourceWorldWidth_ / 2) {
+          newTriangle[1][0] -= this.sourceWorldWidth_;
+        }
+
+        if (newTriangle[2][0] - leftBound > this.sourceWorldWidth_ / 2) {
+          newTriangle[2][0] -= this.sourceWorldWidth_;
+        } // Rarely (if the extent contains both the dateline and prime meridian)
+        // the shift can in turn break some triangles.
+        // Detect this here and don't shift in such cases.
+
+
+        var minX = Math.min(newTriangle[0][0], newTriangle[1][0], newTriangle[2][0]);
+        var maxX = Math.max(newTriangle[0][0], newTriangle[1][0], newTriangle[2][0]);
+
+        if (maxX - minX < this.sourceWorldWidth_ / 2) {
+          triangle.source = newTriangle;
+        }
+      }
+    }.bind(this));
+  }
+
+  transformInvCache = {};
+};
+/**
+ * Adds triangle to the triangulation.
+ * @param {import("../coordinate.js").Coordinate} a The target a coordinate.
+ * @param {import("../coordinate.js").Coordinate} b The target b coordinate.
+ * @param {import("../coordinate.js").Coordinate} c The target c coordinate.
+ * @param {import("../coordinate.js").Coordinate} aSrc The source a coordinate.
+ * @param {import("../coordinate.js").Coordinate} bSrc The source b coordinate.
+ * @param {import("../coordinate.js").Coordinate} cSrc The source c coordinate.
+ * @private
+ */
+
+
+Triangulation.prototype.addTriangle_ = function addTriangle_(a, b, c, aSrc, bSrc, cSrc) {
+  this.triangles_.push({
+    source: [aSrc, bSrc, cSrc],
+    target: [a, b, c]
+  });
+};
+/**
+ * Adds quad (points in clock-wise order) to the triangulation
+ * (and reprojects the vertices) if valid.
+ * Performs quad subdivision if needed to increase precision.
+ *
+ * @param {import("../coordinate.js").Coordinate} a The target a coordinate.
+ * @param {import("../coordinate.js").Coordinate} b The target b coordinate.
+ * @param {import("../coordinate.js").Coordinate} c The target c coordinate.
+ * @param {import("../coordinate.js").Coordinate} d The target d coordinate.
+ * @param {import("../coordinate.js").Coordinate} aSrc The source a coordinate.
+ * @param {import("../coordinate.js").Coordinate} bSrc The source b coordinate.
+ * @param {import("../coordinate.js").Coordinate} cSrc The source c coordinate.
+ * @param {import("../coordinate.js").Coordinate} dSrc The source d coordinate.
+ * @param {number} maxSubdivision Maximal allowed subdivision of the quad.
+ * @private
+ */
+
+
+Triangulation.prototype.addQuad_ = function addQuad_(a, b, c, d, aSrc, bSrc, cSrc, dSrc, maxSubdivision) {
+  var sourceQuadExtent = (0, _extent.boundingExtent)([aSrc, bSrc, cSrc, dSrc]);
+  var sourceCoverageX = this.sourceWorldWidth_ ? (0, _extent.getWidth)(sourceQuadExtent) / this.sourceWorldWidth_ : null;
+  var sourceWorldWidth =
+  /** @type {number} */
+  this.sourceWorldWidth_; // when the quad is wrapped in the source projection
+  // it covers most of the projection extent, but not fully
+
+  var wrapsX = this.sourceProj_.canWrapX() && sourceCoverageX > 0.5 && sourceCoverageX < 1;
+  var needsSubdivision = false;
+
+  if (maxSubdivision > 0) {
+    if (this.targetProj_.isGlobal() && this.targetWorldWidth_) {
+      var targetQuadExtent = (0, _extent.boundingExtent)([a, b, c, d]);
+      var targetCoverageX = (0, _extent.getWidth)(targetQuadExtent) / this.targetWorldWidth_;
+      needsSubdivision = targetCoverageX > MAX_TRIANGLE_WIDTH || needsSubdivision;
+    }
+
+    if (!wrapsX && this.sourceProj_.isGlobal() && sourceCoverageX) {
+      needsSubdivision = sourceCoverageX > MAX_TRIANGLE_WIDTH || needsSubdivision;
+    }
+  }
+
+  if (!needsSubdivision && this.maxSourceExtent_) {
+    if (!(0, _extent.intersects)(sourceQuadExtent, this.maxSourceExtent_)) {
+      // whole quad outside source projection extent -> ignore
+      return;
+    }
+  }
+
+  if (!needsSubdivision) {
+    if (!isFinite(aSrc[0]) || !isFinite(aSrc[1]) || !isFinite(bSrc[0]) || !isFinite(bSrc[1]) || !isFinite(cSrc[0]) || !isFinite(cSrc[1]) || !isFinite(dSrc[0]) || !isFinite(dSrc[1])) {
+      if (maxSubdivision > 0) {
+        needsSubdivision = true;
+      } else {
+        return;
+      }
+    }
+  }
+
+  if (maxSubdivision > 0) {
+    if (!needsSubdivision) {
+      var center = [(a[0] + c[0]) / 2, (a[1] + c[1]) / 2];
+      var centerSrc = this.transformInv_(center);
+      var dx;
+
+      if (wrapsX) {
+        var centerSrcEstimX = ((0, _math.modulo)(aSrc[0], sourceWorldWidth) + (0, _math.modulo)(cSrc[0], sourceWorldWidth)) / 2;
+        dx = centerSrcEstimX - (0, _math.modulo)(centerSrc[0], sourceWorldWidth);
+      } else {
+        dx = (aSrc[0] + cSrc[0]) / 2 - centerSrc[0];
+      }
+
+      var dy = (aSrc[1] + cSrc[1]) / 2 - centerSrc[1];
+      var centerSrcErrorSquared = dx * dx + dy * dy;
+      needsSubdivision = centerSrcErrorSquared > this.errorThresholdSquared_;
+    }
+
+    if (needsSubdivision) {
+      if (Math.abs(a[0] - c[0]) <= Math.abs(a[1] - c[1])) {
+        // split horizontally (top & bottom)
+        var bc = [(b[0] + c[0]) / 2, (b[1] + c[1]) / 2];
+        var bcSrc = this.transformInv_(bc);
+        var da = [(d[0] + a[0]) / 2, (d[1] + a[1]) / 2];
+        var daSrc = this.transformInv_(da);
+        this.addQuad_(a, b, bc, da, aSrc, bSrc, bcSrc, daSrc, maxSubdivision - 1);
+        this.addQuad_(da, bc, c, d, daSrc, bcSrc, cSrc, dSrc, maxSubdivision - 1);
+      } else {
+        // split vertically (left & right)
+        var ab = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        var abSrc = this.transformInv_(ab);
+        var cd = [(c[0] + d[0]) / 2, (c[1] + d[1]) / 2];
+        var cdSrc = this.transformInv_(cd);
+        this.addQuad_(a, ab, cd, d, aSrc, abSrc, cdSrc, dSrc, maxSubdivision - 1);
+        this.addQuad_(ab, b, c, cd, abSrc, bSrc, cSrc, cdSrc, maxSubdivision - 1);
+      }
+
+      return;
+    }
+  }
+
+  if (wrapsX) {
+    if (!this.canWrapXInSource_) {
+      return;
+    }
+
+    this.wrapsXInSource_ = true;
+  }
+
+  this.addTriangle_(a, c, d, aSrc, cSrc, dSrc);
+  this.addTriangle_(a, b, c, aSrc, bSrc, cSrc);
+};
+/**
+ * Calculates extent of the 'source' coordinates from all the triangles.
+ *
+ * @return {import("../extent.js").Extent} Calculated extent.
+ */
+
+
+Triangulation.prototype.calculateSourceExtent = function calculateSourceExtent() {
+  var extent = (0, _extent.createEmpty)();
+  this.triangles_.forEach(function (triangle, i, arr) {
+    var src = triangle.source;
+    (0, _extent.extendCoordinate)(extent, src[0]);
+    (0, _extent.extendCoordinate)(extent, src[1]);
+    (0, _extent.extendCoordinate)(extent, src[2]);
+  });
+  return extent;
+};
+/**
+ * @return {Array<Triangle>} Array of the calculated triangles.
+ */
+
+
+Triangulation.prototype.getTriangles = function getTriangles() {
+  return this.triangles_;
+};
+
+var _default = Triangulation; //# sourceMappingURL=Triangulation.js.map
+
+exports.default = _default;
+},{"../extent.js":"pbFF","../math.js":"cgU2","../proj.js":"bkYg"}],"PSAO":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _common = require("./common.js");
+
+var _Tile = _interopRequireDefault(require("../Tile.js"));
+
+var _TileState = _interopRequireDefault(require("../TileState.js"));
+
+var _events = require("../events.js");
+
+var _EventType = _interopRequireDefault(require("../events/EventType.js"));
+
+var _extent = require("../extent.js");
+
+var _math = require("../math.js");
+
+var _reproj = require("../reproj.js");
+
+var _Triangulation = _interopRequireDefault(require("./Triangulation.js"));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/**
+ * @module ol/reproj/Tile
+ */
+
+/**
+ * @typedef {function(number, number, number, number) : import("../Tile.js").default} FunctionType
+ */
+
+/**
+ * @classdesc
+ * Class encapsulating single reprojected tile.
+ * See {@link module:ol/source/TileImage~TileImage}.
+ *
+ */
+var ReprojTile =
+/*@__PURE__*/
+function (Tile) {
+  function ReprojTile(sourceProj, sourceTileGrid, targetProj, targetTileGrid, tileCoord, wrappedTileCoord, pixelRatio, gutter, getTileFunction, opt_errorThreshold, opt_renderEdges) {
+    Tile.call(this, tileCoord, _TileState.default.IDLE);
+    /**
+     * @private
+     * @type {boolean}
+     */
+
+    this.renderEdges_ = opt_renderEdges !== undefined ? opt_renderEdges : false;
+    /**
+     * @private
+     * @type {number}
+     */
+
+    this.pixelRatio_ = pixelRatio;
+    /**
+     * @private
+     * @type {number}
+     */
+
+    this.gutter_ = gutter;
+    /**
+     * @private
+     * @type {HTMLCanvasElement}
+     */
+
+    this.canvas_ = null;
+    /**
+     * @private
+     * @type {import("../tilegrid/TileGrid.js").default}
+     */
+
+    this.sourceTileGrid_ = sourceTileGrid;
+    /**
+     * @private
+     * @type {import("../tilegrid/TileGrid.js").default}
+     */
+
+    this.targetTileGrid_ = targetTileGrid;
+    /**
+     * @private
+     * @type {import("../tilecoord.js").TileCoord}
+     */
+
+    this.wrappedTileCoord_ = wrappedTileCoord ? wrappedTileCoord : tileCoord;
+    /**
+     * @private
+     * @type {!Array<import("../Tile.js").default>}
+     */
+
+    this.sourceTiles_ = [];
+    /**
+     * @private
+     * @type {Array<import("../events.js").EventsKey>}
+     */
+
+    this.sourcesListenerKeys_ = null;
+    /**
+     * @private
+     * @type {number}
+     */
+
+    this.sourceZ_ = 0;
+    var targetExtent = targetTileGrid.getTileCoordExtent(this.wrappedTileCoord_);
+    var maxTargetExtent = this.targetTileGrid_.getExtent();
+    var maxSourceExtent = this.sourceTileGrid_.getExtent();
+    var limitedTargetExtent = maxTargetExtent ? (0, _extent.getIntersection)(targetExtent, maxTargetExtent) : targetExtent;
+
+    if ((0, _extent.getArea)(limitedTargetExtent) === 0) {
+      // Tile is completely outside range -> EMPTY
+      // TODO: is it actually correct that the source even creates the tile ?
+      this.state = _TileState.default.EMPTY;
+      return;
+    }
+
+    var sourceProjExtent = sourceProj.getExtent();
+
+    if (sourceProjExtent) {
+      if (!maxSourceExtent) {
+        maxSourceExtent = sourceProjExtent;
+      } else {
+        maxSourceExtent = (0, _extent.getIntersection)(maxSourceExtent, sourceProjExtent);
+      }
+    }
+
+    var targetResolution = targetTileGrid.getResolution(this.wrappedTileCoord_[0]);
+    var targetCenter = (0, _extent.getCenter)(limitedTargetExtent);
+    var sourceResolution = (0, _reproj.calculateSourceResolution)(sourceProj, targetProj, targetCenter, targetResolution);
+
+    if (!isFinite(sourceResolution) || sourceResolution <= 0) {
+      // invalid sourceResolution -> EMPTY
+      // probably edges of the projections when no extent is defined
+      this.state = _TileState.default.EMPTY;
+      return;
+    }
+
+    var errorThresholdInPixels = opt_errorThreshold !== undefined ? opt_errorThreshold : _common.ERROR_THRESHOLD;
+    /**
+     * @private
+     * @type {!import("./Triangulation.js").default}
+     */
+
+    this.triangulation_ = new _Triangulation.default(sourceProj, targetProj, limitedTargetExtent, maxSourceExtent, sourceResolution * errorThresholdInPixels);
+
+    if (this.triangulation_.getTriangles().length === 0) {
+      // no valid triangles -> EMPTY
+      this.state = _TileState.default.EMPTY;
+      return;
+    }
+
+    this.sourceZ_ = sourceTileGrid.getZForResolution(sourceResolution);
+    var sourceExtent = this.triangulation_.calculateSourceExtent();
+
+    if (maxSourceExtent) {
+      if (sourceProj.canWrapX()) {
+        sourceExtent[1] = (0, _math.clamp)(sourceExtent[1], maxSourceExtent[1], maxSourceExtent[3]);
+        sourceExtent[3] = (0, _math.clamp)(sourceExtent[3], maxSourceExtent[1], maxSourceExtent[3]);
+      } else {
+        sourceExtent = (0, _extent.getIntersection)(sourceExtent, maxSourceExtent);
+      }
+    }
+
+    if (!(0, _extent.getArea)(sourceExtent)) {
+      this.state = _TileState.default.EMPTY;
+    } else {
+      var sourceRange = sourceTileGrid.getTileRangeForExtentAndZ(sourceExtent, this.sourceZ_);
+
+      for (var srcX = sourceRange.minX; srcX <= sourceRange.maxX; srcX++) {
+        for (var srcY = sourceRange.minY; srcY <= sourceRange.maxY; srcY++) {
+          var tile = getTileFunction(this.sourceZ_, srcX, srcY, pixelRatio);
+
+          if (tile) {
+            this.sourceTiles_.push(tile);
+          }
+        }
+      }
+
+      if (this.sourceTiles_.length === 0) {
+        this.state = _TileState.default.EMPTY;
+      }
+    }
+  }
+
+  if (Tile) ReprojTile.__proto__ = Tile;
+  ReprojTile.prototype = Object.create(Tile && Tile.prototype);
+  ReprojTile.prototype.constructor = ReprojTile;
+  /**
+   * @inheritDoc
+   */
+
+  ReprojTile.prototype.disposeInternal = function disposeInternal() {
+    if (this.state == _TileState.default.LOADING) {
+      this.unlistenSources_();
+    }
+
+    Tile.prototype.disposeInternal.call(this);
+  };
+  /**
+   * Get the HTML Canvas element for this tile.
+   * @return {HTMLCanvasElement} Canvas.
+   */
+
+
+  ReprojTile.prototype.getImage = function getImage() {
+    return this.canvas_;
+  };
+  /**
+   * @private
+   */
+
+
+  ReprojTile.prototype.reproject_ = function reproject_() {
+    var sources = [];
+    this.sourceTiles_.forEach(function (tile, i, arr) {
+      if (tile && tile.getState() == _TileState.default.LOADED) {
+        sources.push({
+          extent: this.sourceTileGrid_.getTileCoordExtent(tile.tileCoord),
+          image: tile.getImage()
+        });
+      }
+    }.bind(this));
+    this.sourceTiles_.length = 0;
+
+    if (sources.length === 0) {
+      this.state = _TileState.default.ERROR;
+    } else {
+      var z = this.wrappedTileCoord_[0];
+      var size = this.targetTileGrid_.getTileSize(z);
+      var width = typeof size === 'number' ? size : size[0];
+      var height = typeof size === 'number' ? size : size[1];
+      var targetResolution = this.targetTileGrid_.getResolution(z);
+      var sourceResolution = this.sourceTileGrid_.getResolution(this.sourceZ_);
+      var targetExtent = this.targetTileGrid_.getTileCoordExtent(this.wrappedTileCoord_);
+      this.canvas_ = (0, _reproj.render)(width, height, this.pixelRatio_, sourceResolution, this.sourceTileGrid_.getExtent(), targetResolution, targetExtent, this.triangulation_, sources, this.gutter_, this.renderEdges_);
+      this.state = _TileState.default.LOADED;
+    }
+
+    this.changed();
+  };
+  /**
+   * @inheritDoc
+   */
+
+
+  ReprojTile.prototype.load = function load() {
+    if (this.state == _TileState.default.IDLE) {
+      this.state = _TileState.default.LOADING;
+      this.changed();
+      var leftToLoad = 0;
+      this.sourcesListenerKeys_ = [];
+      this.sourceTiles_.forEach(function (tile, i, arr) {
+        var state = tile.getState();
+
+        if (state == _TileState.default.IDLE || state == _TileState.default.LOADING) {
+          leftToLoad++;
+          var sourceListenKey = (0, _events.listen)(tile, _EventType.default.CHANGE, function (e) {
+            var state = tile.getState();
+
+            if (state == _TileState.default.LOADED || state == _TileState.default.ERROR || state == _TileState.default.EMPTY) {
+              (0, _events.unlistenByKey)(sourceListenKey);
+              leftToLoad--;
+
+              if (leftToLoad === 0) {
+                this.unlistenSources_();
+                this.reproject_();
+              }
+            }
+          }, this);
+          this.sourcesListenerKeys_.push(sourceListenKey);
+        }
+      }.bind(this));
+      this.sourceTiles_.forEach(function (tile, i, arr) {
+        var state = tile.getState();
+
+        if (state == _TileState.default.IDLE) {
+          tile.load();
+        }
+      });
+
+      if (leftToLoad === 0) {
+        setTimeout(this.reproject_.bind(this), 0);
+      }
+    }
+  };
+  /**
+   * @private
+   */
+
+
+  ReprojTile.prototype.unlistenSources_ = function unlistenSources_() {
+    this.sourcesListenerKeys_.forEach(_events.unlistenByKey);
+    this.sourcesListenerKeys_ = null;
+  };
+
+  return ReprojTile;
+}(_Tile.default);
+
+var _default = ReprojTile; //# sourceMappingURL=Tile.js.map
+
+exports.default = _default;
+},{"./common.js":"s+12","../Tile.js":"lLEG","../TileState.js":"5TPV","../events.js":"E9xa","../events/EventType.js":"lUmy","../extent.js":"pbFF","../math.js":"cgU2","../reproj.js":"XzS7","./Triangulation.js":"nSx6"}],"WLnk":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.createFromTemplate = createFromTemplate;
+exports.createFromTemplates = createFromTemplates;
+exports.createFromTileUrlFunctions = createFromTileUrlFunctions;
+exports.nullTileUrlFunction = nullTileUrlFunction;
+exports.expandUrl = expandUrl;
+
+var _asserts = require("./asserts.js");
+
+var _math = require("./math.js");
+
+var _tilecoord = require("./tilecoord.js");
+
+/**
+ * @module ol/tileurlfunction
+ */
+
+/**
+ * @param {string} template Template.
+ * @param {import("./tilegrid/TileGrid.js").default} tileGrid Tile grid.
+ * @return {import("./Tile.js").UrlFunction} Tile URL function.
+ */
+function createFromTemplate(template, tileGrid) {
+  var zRegEx = /\{z\}/g;
+  var xRegEx = /\{x\}/g;
+  var yRegEx = /\{y\}/g;
+  var dashYRegEx = /\{-y\}/g;
+  return (
+    /**
+     * @param {import("./tilecoord.js").TileCoord} tileCoord Tile Coordinate.
+     * @param {number} pixelRatio Pixel ratio.
+     * @param {import("./proj/Projection.js").default} projection Projection.
+     * @return {string|undefined} Tile URL.
+     */
+    function (tileCoord, pixelRatio, projection) {
+      if (!tileCoord) {
+        return undefined;
+      } else {
+        return template.replace(zRegEx, tileCoord[0].toString()).replace(xRegEx, tileCoord[1].toString()).replace(yRegEx, function () {
+          var y = -tileCoord[2] - 1;
+          return y.toString();
+        }).replace(dashYRegEx, function () {
+          var z = tileCoord[0];
+          var range = tileGrid.getFullTileRange(z);
+          (0, _asserts.assert)(range, 55); // The {-y} placeholder requires a tile grid with extent
+
+          var y = range.getHeight() + tileCoord[2];
+          return y.toString();
+        });
+      }
+    }
+  );
+}
+/**
+ * @param {Array<string>} templates Templates.
+ * @param {import("./tilegrid/TileGrid.js").default} tileGrid Tile grid.
+ * @return {import("./Tile.js").UrlFunction} Tile URL function.
+ */
+
+
+function createFromTemplates(templates, tileGrid) {
+  var len = templates.length;
+  var tileUrlFunctions = new Array(len);
+
+  for (var i = 0; i < len; ++i) {
+    tileUrlFunctions[i] = createFromTemplate(templates[i], tileGrid);
+  }
+
+  return createFromTileUrlFunctions(tileUrlFunctions);
+}
+/**
+ * @param {Array<import("./Tile.js").UrlFunction>} tileUrlFunctions Tile URL Functions.
+ * @return {import("./Tile.js").UrlFunction} Tile URL function.
+ */
+
+
+function createFromTileUrlFunctions(tileUrlFunctions) {
+  if (tileUrlFunctions.length === 1) {
+    return tileUrlFunctions[0];
+  }
+
+  return (
+    /**
+     * @param {import("./tilecoord.js").TileCoord} tileCoord Tile Coordinate.
+     * @param {number} pixelRatio Pixel ratio.
+     * @param {import("./proj/Projection.js").default} projection Projection.
+     * @return {string|undefined} Tile URL.
+     */
+    function (tileCoord, pixelRatio, projection) {
+      if (!tileCoord) {
+        return undefined;
+      } else {
+        var h = (0, _tilecoord.hash)(tileCoord);
+        var index = (0, _math.modulo)(h, tileUrlFunctions.length);
+        return tileUrlFunctions[index](tileCoord, pixelRatio, projection);
+      }
+    }
+  );
+}
+/**
+ * @param {import("./tilecoord.js").TileCoord} tileCoord Tile coordinate.
+ * @param {number} pixelRatio Pixel ratio.
+ * @param {import("./proj/Projection.js").default} projection Projection.
+ * @return {string|undefined} Tile URL.
+ */
+
+
+function nullTileUrlFunction(tileCoord, pixelRatio, projection) {
+  return undefined;
+}
+/**
+ * @param {string} url URL.
+ * @return {Array<string>} Array of urls.
+ */
+
+
+function expandUrl(url) {
+  var urls = [];
+  var match = /\{([a-z])-([a-z])\}/.exec(url);
+
+  if (match) {
+    // char range
+    var startCharCode = match[1].charCodeAt(0);
+    var stopCharCode = match[2].charCodeAt(0);
+    var charCode;
+
+    for (charCode = startCharCode; charCode <= stopCharCode; ++charCode) {
+      urls.push(url.replace(match[0], String.fromCharCode(charCode)));
+    }
+
+    return urls;
+  }
+
+  match = match = /\{(\d+)-(\d+)\}/.exec(url);
+
+  if (match) {
+    // number range
+    var stop = parseInt(match[2], 10);
+
+    for (var i = parseInt(match[1], 10); i <= stop; i++) {
+      urls.push(url.replace(match[0], i.toString()));
+    }
+
+    return urls;
+  }
+
+  urls.push(url);
+  return urls;
+} //# sourceMappingURL=tileurlfunction.js.map
+},{"./asserts.js":"hgi2","./math.js":"cgU2","./tilecoord.js":"GpvC"}],"odY2":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+/**
+ * @module ol/source/TileEventType
+ */
+
+/**
+ * @enum {string}
+ */
+var _default = {
+  /**
+   * Triggered when a tile starts loading.
+   * @event module:ol/source/Tile.TileSourceEvent#tileloadstart
+   * @api
+   */
+  TILELOADSTART: 'tileloadstart',
+
+  /**
+   * Triggered when a tile finishes loading, either when its data is loaded,
+   * or when loading was aborted because the tile is no longer needed.
+   * @event module:ol/source/Tile.TileSourceEvent#tileloadend
+   * @api
+   */
+  TILELOADEND: 'tileloadend',
+
+  /**
+   * Triggered if tile loading results in an error.
+   * @event module:ol/source/Tile.TileSourceEvent#tileloaderror
+   * @api
+   */
+  TILELOADERROR: 'tileloaderror'
+}; //# sourceMappingURL=TileEventType.js.map
+
+exports.default = _default;
+},{}],"kKjj":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _util = require("../util.js");
+
+var _TileState = _interopRequireDefault(require("../TileState.js"));
+
+var _tileurlfunction = require("../tileurlfunction.js");
+
+var _Tile = _interopRequireWildcard(require("./Tile.js"));
+
+var _TileEventType = _interopRequireDefault(require("./TileEventType.js"));
+
+var _tilecoord = require("../tilecoord.js");
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) { var desc = Object.defineProperty && Object.getOwnPropertyDescriptor ? Object.getOwnPropertyDescriptor(obj, key) : {}; if (desc.get || desc.set) { Object.defineProperty(newObj, key, desc); } else { newObj[key] = obj[key]; } } } } newObj.default = obj; return newObj; } }
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/**
+ * @module ol/source/UrlTile
+ */
+
+/**
+ * @typedef {Object} Options
+ * @property {import("./Source.js").AttributionLike} [attributions]
+ * @property {boolean} [attributionsCollapsible=true] Attributions are collapsible.
+ * @property {number} [cacheSize]
+ * @property {boolean} [opaque]
+ * @property {import("../proj.js").ProjectionLike} [projection]
+ * @property {import("./State.js").default} [state]
+ * @property {import("../tilegrid/TileGrid.js").default} [tileGrid]
+ * @property {import("../Tile.js").LoadFunction} tileLoadFunction
+ * @property {number} [tilePixelRatio]
+ * @property {import("../Tile.js").UrlFunction} [tileUrlFunction]
+ * @property {string} [url]
+ * @property {Array<string>} [urls]
+ * @property {boolean} [wrapX=true]
+ * @property {number} [transition]
+ * @property {string} [key]
+ */
+
+/**
+ * @classdesc
+ * Base class for sources providing tiles divided into a tile grid over http.
+ *
+ * @fires import("./Tile.js").TileSourceEvent
+ */
+var UrlTile =
+/*@__PURE__*/
+function (TileSource) {
+  function UrlTile(options) {
+    TileSource.call(this, {
+      attributions: options.attributions,
+      cacheSize: options.cacheSize,
+      opaque: options.opaque,
+      projection: options.projection,
+      state: options.state,
+      tileGrid: options.tileGrid,
+      tilePixelRatio: options.tilePixelRatio,
+      wrapX: options.wrapX,
+      transition: options.transition,
+      key: options.key,
+      attributionsCollapsible: options.attributionsCollapsible
+    });
+    /**
+     * @private
+     * @type {boolean}
+     */
+
+    this.generateTileUrlFunction_ = !options.tileUrlFunction;
+    /**
+     * @protected
+     * @type {import("../Tile.js").LoadFunction}
+     */
+
+    this.tileLoadFunction = options.tileLoadFunction;
+    /**
+     * @protected
+     * @type {import("../Tile.js").UrlFunction}
+     */
+
+    this.tileUrlFunction = options.tileUrlFunction ? options.tileUrlFunction.bind(this) : _tileurlfunction.nullTileUrlFunction;
+    /**
+     * @protected
+     * @type {!Array<string>|null}
+     */
+
+    this.urls = null;
+
+    if (options.urls) {
+      this.setUrls(options.urls);
+    } else if (options.url) {
+      this.setUrl(options.url);
+    }
+
+    if (options.tileUrlFunction) {
+      this.setTileUrlFunction(options.tileUrlFunction, this.key_);
+    }
+    /**
+     * @private
+     * @type {!Object<string, boolean>}
+     */
+
+
+    this.tileLoadingKeys_ = {};
+  }
+
+  if (TileSource) UrlTile.__proto__ = TileSource;
+  UrlTile.prototype = Object.create(TileSource && TileSource.prototype);
+  UrlTile.prototype.constructor = UrlTile;
+  /**
+   * Return the tile load function of the source.
+   * @return {import("../Tile.js").LoadFunction} TileLoadFunction
+   * @api
+   */
+
+  UrlTile.prototype.getTileLoadFunction = function getTileLoadFunction() {
+    return this.tileLoadFunction;
+  };
+  /**
+   * Return the tile URL function of the source.
+   * @return {import("../Tile.js").UrlFunction} TileUrlFunction
+   * @api
+   */
+
+
+  UrlTile.prototype.getTileUrlFunction = function getTileUrlFunction() {
+    return this.tileUrlFunction;
+  };
+  /**
+   * Return the URLs used for this source.
+   * When a tileUrlFunction is used instead of url or urls,
+   * null will be returned.
+   * @return {!Array<string>|null} URLs.
+   * @api
+   */
+
+
+  UrlTile.prototype.getUrls = function getUrls() {
+    return this.urls;
+  };
+  /**
+   * Handle tile change events.
+   * @param {import("../events/Event.js").default} event Event.
+   * @protected
+   */
+
+
+  UrlTile.prototype.handleTileChange = function handleTileChange(event) {
+    var tile =
+    /** @type {import("../Tile.js").default} */
+    event.target;
+    var uid = (0, _util.getUid)(tile);
+    var tileState = tile.getState();
+    var type;
+
+    if (tileState == _TileState.default.LOADING) {
+      this.tileLoadingKeys_[uid] = true;
+      type = _TileEventType.default.TILELOADSTART;
+    } else if (uid in this.tileLoadingKeys_) {
+      delete this.tileLoadingKeys_[uid];
+      type = tileState == _TileState.default.ERROR ? _TileEventType.default.TILELOADERROR : tileState == _TileState.default.LOADED || tileState == _TileState.default.ABORT ? _TileEventType.default.TILELOADEND : undefined;
+    }
+
+    if (type != undefined) {
+      this.dispatchEvent(new _Tile.TileSourceEvent(type, tile));
+    }
+  };
+  /**
+   * Set the tile load function of the source.
+   * @param {import("../Tile.js").LoadFunction} tileLoadFunction Tile load function.
+   * @api
+   */
+
+
+  UrlTile.prototype.setTileLoadFunction = function setTileLoadFunction(tileLoadFunction) {
+    this.tileCache.clear();
+    this.tileLoadFunction = tileLoadFunction;
+    this.changed();
+  };
+  /**
+   * Set the tile URL function of the source.
+   * @param {import("../Tile.js").UrlFunction} tileUrlFunction Tile URL function.
+   * @param {string=} key Optional new tile key for the source.
+   * @api
+   */
+
+
+  UrlTile.prototype.setTileUrlFunction = function setTileUrlFunction(tileUrlFunction, key) {
+    this.tileUrlFunction = tileUrlFunction;
+    this.tileCache.pruneExceptNewestZ();
+
+    if (typeof key !== 'undefined') {
+      this.setKey(key);
+    } else {
+      this.changed();
+    }
+  };
+  /**
+   * Set the URL to use for requests.
+   * @param {string} url URL.
+   * @api
+   */
+
+
+  UrlTile.prototype.setUrl = function setUrl(url) {
+    var urls = this.urls = (0, _tileurlfunction.expandUrl)(url);
+    this.setUrls(urls);
+  };
+  /**
+   * Set the URLs to use for requests.
+   * @param {Array<string>} urls URLs.
+   * @api
+   */
+
+
+  UrlTile.prototype.setUrls = function setUrls(urls) {
+    this.urls = urls;
+    var key = urls.join('\n');
+
+    if (this.generateTileUrlFunction_) {
+      this.setTileUrlFunction((0, _tileurlfunction.createFromTemplates)(urls, this.tileGrid), key);
+    } else {
+      this.setKey(key);
+    }
+  };
+  /**
+   * @inheritDoc
+   */
+
+
+  UrlTile.prototype.useTile = function useTile(z, x, y) {
+    var tileCoordKey = (0, _tilecoord.getKeyZXY)(z, x, y);
+
+    if (this.tileCache.containsKey(tileCoordKey)) {
+      this.tileCache.get(tileCoordKey);
+    }
+  };
+
+  return UrlTile;
+}(_Tile.default);
+
+var _default = UrlTile; //# sourceMappingURL=UrlTile.js.map
+
+exports.default = _default;
+},{"../util.js":"3bmr","../TileState.js":"5TPV","../tileurlfunction.js":"WLnk","./Tile.js":"L7OL","./TileEventType.js":"odY2","../tilecoord.js":"GpvC"}],"Hf9V":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _common = require("../reproj/common.js");
+
+var _util = require("../util.js");
+
+var _ImageTile = _interopRequireDefault(require("../ImageTile.js"));
+
+var _TileCache = _interopRequireDefault(require("../TileCache.js"));
+
+var _TileState = _interopRequireDefault(require("../TileState.js"));
+
+var _events = require("../events.js");
+
+var _EventType = _interopRequireDefault(require("../events/EventType.js"));
+
+var _proj = require("../proj.js");
+
+var _Tile = _interopRequireDefault(require("../reproj/Tile.js"));
+
+var _UrlTile = _interopRequireDefault(require("./UrlTile.js"));
+
+var _tilecoord = require("../tilecoord.js");
+
+var _tilegrid = require("../tilegrid.js");
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/**
+ * @module ol/source/TileImage
+ */
+
+/**
+ * @typedef {Object} Options
+ * @property {import("./Source.js").AttributionLike} [attributions] Attributions.
+ * @property {boolean} [attributionsCollapsible=true] Attributions are collapsible.
+ * @property {number} [cacheSize=2048] Cache size.
+ * @property {null|string} [crossOrigin] The `crossOrigin` attribute for loaded images.  Note that
+ * you must provide a `crossOrigin` value if you are using the WebGL renderer or if you want to
+ * access pixel data with the Canvas renderer.  See
+ * https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_enabled_image for more detail.
+ * @property {boolean} [opaque=true] Whether the layer is opaque.
+ * @property {import("../proj.js").ProjectionLike} projection Projection.
+ * @property {number} [reprojectionErrorThreshold=0.5] Maximum allowed reprojection error (in pixels).
+ * Higher values can increase reprojection performance, but decrease precision.
+ * @property {import("./State.js").default} [state] Source state.
+ * @property {typeof import("../ImageTile.js").default} [tileClass] Class used to instantiate image tiles.
+ * Default is {@link module:ol/ImageTile~ImageTile}.
+ * @property {import("../tilegrid/TileGrid.js").default} [tileGrid] Tile grid.
+ * @property {import("../Tile.js").LoadFunction} [tileLoadFunction] Optional function to load a tile given a URL. The default is
+ * ```js
+ * function(imageTile, src) {
+ *   imageTile.getImage().src = src;
+ * };
+ * ```
+ * @property {number} [tilePixelRatio=1] The pixel ratio used by the tile service. For example, if the tile
+ * service advertizes 256px by 256px tiles but actually sends 512px
+ * by 512px images (for retina/hidpi devices) then `tilePixelRatio`
+ * should be set to `2`.
+ * @property {import("../Tile.js").UrlFunction} [tileUrlFunction] Optional function to get tile URL given a tile coordinate and the projection.
+ * @property {string} [url] URL template. Must include `{x}`, `{y}` or `{-y}`, and `{z}` placeholders.
+ * A `{?-?}` template pattern, for example `subdomain{a-f}.domain.com`, may be
+ * used instead of defining each one separately in the `urls` option.
+ * @property {Array<string>} [urls] An array of URL templates.
+ * @property {boolean} [wrapX] Whether to wrap the world horizontally. The default, is to
+ * request out-of-bounds tiles from the server. When set to `false`, only one
+ * world will be rendered. When set to `true`, tiles will be requested for one
+ * world only, but they will be wrapped horizontally to render multiple worlds.
+ * @property {number} [transition] Duration of the opacity transition for rendering.
+ * To disable the opacity transition, pass `transition: 0`.
+ * @property {string} [key] Optional tile key for proper cache fetching
+ */
+
+/**
+ * @classdesc
+ * Base class for sources providing images divided into a tile grid.
+ *
+ * @fires import("./Tile.js").TileSourceEvent
+ * @api
+ */
+var TileImage =
+/*@__PURE__*/
+function (UrlTile) {
+  function TileImage(options) {
+    UrlTile.call(this, {
+      attributions: options.attributions,
+      cacheSize: options.cacheSize,
+      opaque: options.opaque,
+      projection: options.projection,
+      state: options.state,
+      tileGrid: options.tileGrid,
+      tileLoadFunction: options.tileLoadFunction ? options.tileLoadFunction : defaultTileLoadFunction,
+      tilePixelRatio: options.tilePixelRatio,
+      tileUrlFunction: options.tileUrlFunction,
+      url: options.url,
+      urls: options.urls,
+      wrapX: options.wrapX,
+      transition: options.transition,
+      key: options.key,
+      attributionsCollapsible: options.attributionsCollapsible
+    });
+    /**
+     * @protected
+     * @type {?string}
+     */
+
+    this.crossOrigin = options.crossOrigin !== undefined ? options.crossOrigin : null;
+    /**
+     * @protected
+     * @type {typeof ImageTile}
+     */
+
+    this.tileClass = options.tileClass !== undefined ? options.tileClass : _ImageTile.default;
+    /**
+     * @protected
+     * @type {!Object<string, TileCache>}
+     */
+
+    this.tileCacheForProjection = {};
+    /**
+     * @protected
+     * @type {!Object<string, import("../tilegrid/TileGrid.js").default>}
+     */
+
+    this.tileGridForProjection = {};
+    /**
+     * @private
+     * @type {number|undefined}
+     */
+
+    this.reprojectionErrorThreshold_ = options.reprojectionErrorThreshold;
+    /**
+     * @private
+     * @type {boolean}
+     */
+
+    this.renderReprojectionEdges_ = false;
+  }
+
+  if (UrlTile) TileImage.__proto__ = UrlTile;
+  TileImage.prototype = Object.create(UrlTile && UrlTile.prototype);
+  TileImage.prototype.constructor = TileImage;
+  /**
+   * @inheritDoc
+   */
+
+  TileImage.prototype.canExpireCache = function canExpireCache() {
+    if (!_common.ENABLE_RASTER_REPROJECTION) {
+      return UrlTile.prototype.canExpireCache.call(this);
+    }
+
+    if (this.tileCache.canExpireCache()) {
+      return true;
+    } else {
+      for (var key in this.tileCacheForProjection) {
+        if (this.tileCacheForProjection[key].canExpireCache()) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+  /**
+   * @inheritDoc
+   */
+
+
+  TileImage.prototype.expireCache = function expireCache(projection, usedTiles) {
+    if (!_common.ENABLE_RASTER_REPROJECTION) {
+      UrlTile.prototype.expireCache.call(this, projection, usedTiles);
+      return;
+    }
+
+    var usedTileCache = this.getTileCacheForProjection(projection);
+    this.tileCache.expireCache(this.tileCache == usedTileCache ? usedTiles : {});
+
+    for (var id in this.tileCacheForProjection) {
+      var tileCache = this.tileCacheForProjection[id];
+      tileCache.expireCache(tileCache == usedTileCache ? usedTiles : {});
+    }
+  };
+  /**
+   * @inheritDoc
+   */
+
+
+  TileImage.prototype.getGutterForProjection = function getGutterForProjection(projection) {
+    if (_common.ENABLE_RASTER_REPROJECTION && this.getProjection() && projection && !(0, _proj.equivalent)(this.getProjection(), projection)) {
+      return 0;
+    } else {
+      return this.getGutter();
+    }
+  };
+  /**
+   * @return {number} Gutter.
+   */
+
+
+  TileImage.prototype.getGutter = function getGutter() {
+    return 0;
+  };
+  /**
+   * @inheritDoc
+   */
+
+
+  TileImage.prototype.getOpaque = function getOpaque(projection) {
+    if (_common.ENABLE_RASTER_REPROJECTION && this.getProjection() && projection && !(0, _proj.equivalent)(this.getProjection(), projection)) {
+      return false;
+    } else {
+      return UrlTile.prototype.getOpaque.call(this, projection);
+    }
+  };
+  /**
+   * @inheritDoc
+   */
+
+
+  TileImage.prototype.getTileGridForProjection = function getTileGridForProjection$1(projection) {
+    if (!_common.ENABLE_RASTER_REPROJECTION) {
+      return UrlTile.prototype.getTileGridForProjection.call(this, projection);
+    }
+
+    var thisProj = this.getProjection();
+
+    if (this.tileGrid && (!thisProj || (0, _proj.equivalent)(thisProj, projection))) {
+      return this.tileGrid;
+    } else {
+      var projKey = (0, _util.getUid)(projection);
+
+      if (!(projKey in this.tileGridForProjection)) {
+        this.tileGridForProjection[projKey] = (0, _tilegrid.getForProjection)(projection);
+      }
+
+      return (
+        /** @type {!import("../tilegrid/TileGrid.js").default} */
+        this.tileGridForProjection[projKey]
+      );
+    }
+  };
+  /**
+   * @inheritDoc
+   */
+
+
+  TileImage.prototype.getTileCacheForProjection = function getTileCacheForProjection(projection) {
+    if (!_common.ENABLE_RASTER_REPROJECTION) {
+      return UrlTile.prototype.getTileCacheForProjection.call(this, projection);
+    }
+
+    var thisProj = this.getProjection();
+
+    if (!thisProj || (0, _proj.equivalent)(thisProj, projection)) {
+      return this.tileCache;
+    } else {
+      var projKey = (0, _util.getUid)(projection);
+
+      if (!(projKey in this.tileCacheForProjection)) {
+        this.tileCacheForProjection[projKey] = new _TileCache.default(this.tileCache.highWaterMark);
+      }
+
+      return this.tileCacheForProjection[projKey];
+    }
+  };
+  /**
+   * @param {number} z Tile coordinate z.
+   * @param {number} x Tile coordinate x.
+   * @param {number} y Tile coordinate y.
+   * @param {number} pixelRatio Pixel ratio.
+   * @param {import("../proj/Projection.js").default} projection Projection.
+   * @param {string} key The key set on the tile.
+   * @return {!import("../Tile.js").default} Tile.
+   * @private
+   */
+
+
+  TileImage.prototype.createTile_ = function createTile_(z, x, y, pixelRatio, projection, key) {
+    var tileCoord = [z, x, y];
+    var urlTileCoord = this.getTileCoordForTileUrlFunction(tileCoord, projection);
+    var tileUrl = urlTileCoord ? this.tileUrlFunction(urlTileCoord, pixelRatio, projection) : undefined;
+    var tile = new this.tileClass(tileCoord, tileUrl !== undefined ? _TileState.default.IDLE : _TileState.default.EMPTY, tileUrl !== undefined ? tileUrl : '', this.crossOrigin, this.tileLoadFunction, this.tileOptions);
+    tile.key = key;
+    (0, _events.listen)(tile, _EventType.default.CHANGE, this.handleTileChange, this);
+    return tile;
+  };
+  /**
+   * @inheritDoc
+   */
+
+
+  TileImage.prototype.getTile = function getTile(z, x, y, pixelRatio, projection) {
+    var sourceProjection =
+    /** @type {!import("../proj/Projection.js").default} */
+    this.getProjection();
+
+    if (!_common.ENABLE_RASTER_REPROJECTION || !sourceProjection || !projection || (0, _proj.equivalent)(sourceProjection, projection)) {
+      return this.getTileInternal(z, x, y, pixelRatio, sourceProjection || projection);
+    } else {
+      var cache = this.getTileCacheForProjection(projection);
+      var tileCoord = [z, x, y];
+      var tile;
+      var tileCoordKey = (0, _tilecoord.getKey)(tileCoord);
+
+      if (cache.containsKey(tileCoordKey)) {
+        tile =
+        /** @type {!import("../Tile.js").default} */
+        cache.get(tileCoordKey);
+      }
+
+      var key = this.getKey();
+
+      if (tile && tile.key == key) {
+        return tile;
+      } else {
+        var sourceTileGrid = this.getTileGridForProjection(sourceProjection);
+        var targetTileGrid = this.getTileGridForProjection(projection);
+        var wrappedTileCoord = this.getTileCoordForTileUrlFunction(tileCoord, projection);
+        var newTile = new _Tile.default(sourceProjection, sourceTileGrid, projection, targetTileGrid, tileCoord, wrappedTileCoord, this.getTilePixelRatio(pixelRatio), this.getGutter(), function (z, x, y, pixelRatio) {
+          return this.getTileInternal(z, x, y, pixelRatio, sourceProjection);
+        }.bind(this), this.reprojectionErrorThreshold_, this.renderReprojectionEdges_);
+        newTile.key = key;
+
+        if (tile) {
+          newTile.interimTile = tile;
+          newTile.refreshInterimChain();
+          cache.replace(tileCoordKey, newTile);
+        } else {
+          cache.set(tileCoordKey, newTile);
+        }
+
+        return newTile;
+      }
+    }
+  };
+  /**
+   * @param {number} z Tile coordinate z.
+   * @param {number} x Tile coordinate x.
+   * @param {number} y Tile coordinate y.
+   * @param {number} pixelRatio Pixel ratio.
+   * @param {!import("../proj/Projection.js").default} projection Projection.
+   * @return {!import("../Tile.js").default} Tile.
+   * @protected
+   */
+
+
+  TileImage.prototype.getTileInternal = function getTileInternal(z, x, y, pixelRatio, projection) {
+    var tile = null;
+    var tileCoordKey = (0, _tilecoord.getKeyZXY)(z, x, y);
+    var key = this.getKey();
+
+    if (!this.tileCache.containsKey(tileCoordKey)) {
+      tile = this.createTile_(z, x, y, pixelRatio, projection, key);
+      this.tileCache.set(tileCoordKey, tile);
+    } else {
+      tile = this.tileCache.get(tileCoordKey);
+
+      if (tile.key != key) {
+        // The source's params changed. If the tile has an interim tile and if we
+        // can use it then we use it. Otherwise we create a new tile.  In both
+        // cases we attempt to assign an interim tile to the new tile.
+        var interimTile = tile;
+        tile = this.createTile_(z, x, y, pixelRatio, projection, key); //make the new tile the head of the list,
+
+        if (interimTile.getState() == _TileState.default.IDLE) {
+          //the old tile hasn't begun loading yet, and is now outdated, so we can simply discard it
+          tile.interimTile = interimTile.interimTile;
+        } else {
+          tile.interimTile = interimTile;
+        }
+
+        tile.refreshInterimChain();
+        this.tileCache.replace(tileCoordKey, tile);
+      }
+    }
+
+    return tile;
+  };
+  /**
+   * Sets whether to render reprojection edges or not (usually for debugging).
+   * @param {boolean} render Render the edges.
+   * @api
+   */
+
+
+  TileImage.prototype.setRenderReprojectionEdges = function setRenderReprojectionEdges(render) {
+    if (!_common.ENABLE_RASTER_REPROJECTION || this.renderReprojectionEdges_ == render) {
+      return;
+    }
+
+    this.renderReprojectionEdges_ = render;
+
+    for (var id in this.tileCacheForProjection) {
+      this.tileCacheForProjection[id].clear();
+    }
+
+    this.changed();
+  };
+  /**
+   * Sets the tile grid to use when reprojecting the tiles to the given
+   * projection instead of the default tile grid for the projection.
+   *
+   * This can be useful when the default tile grid cannot be created
+   * (e.g. projection has no extent defined) or
+   * for optimization reasons (custom tile size, resolutions, ...).
+   *
+   * @param {import("../proj.js").ProjectionLike} projection Projection.
+   * @param {import("../tilegrid/TileGrid.js").default} tilegrid Tile grid to use for the projection.
+   * @api
+   */
+
+
+  TileImage.prototype.setTileGridForProjection = function setTileGridForProjection(projection, tilegrid) {
+    if (_common.ENABLE_RASTER_REPROJECTION) {
+      var proj = (0, _proj.get)(projection);
+
+      if (proj) {
+        var projKey = (0, _util.getUid)(proj);
+
+        if (!(projKey in this.tileGridForProjection)) {
+          this.tileGridForProjection[projKey] = tilegrid;
+        }
+      }
+    }
+  };
+
+  return TileImage;
+}(_UrlTile.default);
+/**
+ * @param {ImageTile} imageTile Image tile.
+ * @param {string} src Source.
+ */
+
+
+function defaultTileLoadFunction(imageTile, src) {
+  /** @type {HTMLImageElement|HTMLVideoElement} */
+  imageTile.getImage().src = src;
+}
+
+var _default = TileImage; //# sourceMappingURL=TileImage.js.map
+
+exports.default = _default;
+},{"../reproj/common.js":"s+12","../util.js":"3bmr","../ImageTile.js":"tPcm","../TileCache.js":"g4cv","../TileState.js":"5TPV","../events.js":"E9xa","../events/EventType.js":"lUmy","../proj.js":"bkYg","../reproj/Tile.js":"PSAO","./UrlTile.js":"kKjj","../tilecoord.js":"GpvC","../tilegrid.js":"zlz6"}],"4e4W":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _TileImage = _interopRequireDefault(require("./TileImage.js"));
+
+var _tilegrid = require("../tilegrid.js");
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/**
+ * @module ol/source/XYZ
+ */
+
+/**
+ * @typedef {Object} Options
+ * @property {import("./Source.js").AttributionLike} [attributions] Attributions.
+ * @property {boolean} [attributionsCollapsible=true] Attributions are collapsible.
+ * @property {number} [cacheSize=2048] Cache size.
+ * @property {null|string} [crossOrigin] The `crossOrigin` attribute for loaded images.  Note that
+ * you must provide a `crossOrigin` value if you are using the WebGL renderer or if you want to
+ * access pixel data with the Canvas renderer.  See
+ * https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_enabled_image for more detail.
+ * @property {boolean} [opaque=true] Whether the layer is opaque.
+ * @property {import("../proj.js").ProjectionLike} [projection='EPSG:3857'] Projection.
+ * @property {number} [reprojectionErrorThreshold=0.5] Maximum allowed reprojection error (in pixels).
+ * Higher values can increase reprojection performance, but decrease precision.
+ * @property {number} [maxZoom=18] Optional max zoom level.
+ * @property {number} [minZoom=0] Optional min zoom level.
+ * @property {import("../tilegrid/TileGrid.js").default} [tileGrid] Tile grid.
+ * @property {import("../Tile.js").LoadFunction} [tileLoadFunction] Optional function to load a tile given a URL. The default is
+ * ```js
+ * function(imageTile, src) {
+ *   imageTile.getImage().src = src;
+ * };
+ * ```
+ * @property {number} [tilePixelRatio=1] The pixel ratio used by the tile service.
+ * For example, if the tile service advertizes 256px by 256px tiles but actually sends 512px
+ * by 512px images (for retina/hidpi devices) then `tilePixelRatio`
+ * should be set to `2`.
+ * @property {number|import("../size.js").Size} [tileSize=[256, 256]] The tile size used by the tile service.
+ * @property {import("../Tile.js").UrlFunction} [tileUrlFunction] Optional function to get
+ * tile URL given a tile coordinate and the projection.
+ * Required if url or urls are not provided.
+ * @property {string} [url] URL template. Must include `{x}`, `{y}` or `{-y}`,
+ * and `{z}` placeholders. A `{?-?}` template pattern, for example `subdomain{a-f}.domain.com`,
+ * may be used instead of defining each one separately in the `urls` option.
+ * @property {Array<string>} [urls] An array of URL templates.
+ * @property {boolean} [wrapX=true] Whether to wrap the world horizontally.
+ * @property {number} [transition] Duration of the opacity transition for rendering.
+ * To disable the opacity transition, pass `transition: 0`.
+ */
+
+/**
+ * @classdesc
+ * Layer source for tile data with URLs in a set XYZ format that are
+ * defined in a URL template. By default, this follows the widely-used
+ * Google grid where `x` 0 and `y` 0 are in the top left. Grids like
+ * TMS where `x` 0 and `y` 0 are in the bottom left can be used by
+ * using the `{-y}` placeholder in the URL template, so long as the
+ * source does not have a custom tile grid. In this case,
+ * {@link module:ol/source/TileImage} can be used with a `tileUrlFunction`
+ * such as:
+ *
+ *  tileUrlFunction: function(coordinate) {
+ *    return 'http://mapserver.com/' + coordinate[0] + '/' +
+ *        coordinate[1] + '/' + coordinate[2] + '.png';
+ *    }
+ *
+ * @api
+ */
+var XYZ =
+/*@__PURE__*/
+function (TileImage) {
+  function XYZ(opt_options) {
+    var options = opt_options || {};
+    var projection = options.projection !== undefined ? options.projection : 'EPSG:3857';
+    var tileGrid = options.tileGrid !== undefined ? options.tileGrid : (0, _tilegrid.createXYZ)({
+      extent: (0, _tilegrid.extentFromProjection)(projection),
+      maxZoom: options.maxZoom,
+      minZoom: options.minZoom,
+      tileSize: options.tileSize
+    });
+    TileImage.call(this, {
+      attributions: options.attributions,
+      cacheSize: options.cacheSize,
+      crossOrigin: options.crossOrigin,
+      opaque: options.opaque,
+      projection: projection,
+      reprojectionErrorThreshold: options.reprojectionErrorThreshold,
+      tileGrid: tileGrid,
+      tileLoadFunction: options.tileLoadFunction,
+      tilePixelRatio: options.tilePixelRatio,
+      tileUrlFunction: options.tileUrlFunction,
+      url: options.url,
+      urls: options.urls,
+      wrapX: options.wrapX !== undefined ? options.wrapX : true,
+      transition: options.transition,
+      attributionsCollapsible: options.attributionsCollapsible
+    });
+  }
+
+  if (TileImage) XYZ.__proto__ = TileImage;
+  XYZ.prototype = Object.create(TileImage && TileImage.prototype);
+  XYZ.prototype.constructor = XYZ;
+  return XYZ;
+}(_TileImage.default);
+
+var _default = XYZ; //# sourceMappingURL=XYZ.js.map
+
+exports.default = _default;
+},{"./TileImage.js":"Hf9V","../tilegrid.js":"zlz6"}],"pFtY":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = exports.ATTRIBUTION = void 0;
+
+var _XYZ = _interopRequireDefault(require("./XYZ.js"));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/**
+ * @module ol/source/OSM
+ */
+
+/**
+ * The attribution containing a link to the OpenStreetMap Copyright and License
+ * page.
+ * @const
+ * @type {string}
+ * @api
+ */
+var ATTRIBUTION = '&#169; ' + '<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ' + 'contributors.';
+/**
+ * @typedef {Object} Options
+ * @property {import("./Source.js").AttributionLike} [attributions] Attributions.
+ * @property {number} [cacheSize=2048] Cache size.
+ * @property {null|string} [crossOrigin] The `crossOrigin` attribute for loaded images.  Note that
+ * you must provide a `crossOrigin` value if you are using the WebGL renderer or if you want to
+ * access pixel data with the Canvas renderer.  See
+ * https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_enabled_image for more detail.
+ * @property {number} [maxZoom=19] Max zoom.
+ * @property {boolean} [opaque=true] Whether the layer is opaque.
+ * @property {number} [reprojectionErrorThreshold=1.5] Maximum allowed reprojection error (in pixels).
+ * Higher values can increase reprojection performance, but decrease precision.
+ * @property {import("../Tile.js").LoadFunction} [tileLoadFunction] Optional function to load a tile given a URL. The default is
+ * ```js
+ * function(imageTile, src) {
+ *   imageTile.getImage().src = src;
+ * };
+ * ```
+ * @property {string} [url='https://{a-c}.tile.openstreetmap.org/{z}/{x}/{y}.png'] URL template.
+ * Must include `{x}`, `{y}` or `{-y}`, and `{z}` placeholders.
+ * @property {boolean} [wrapX=true] Whether to wrap the world horizontally.
+ */
+
+/**
+ * @classdesc
+ * Layer source for the OpenStreetMap tile server.
+ * @api
+ */
+
+exports.ATTRIBUTION = ATTRIBUTION;
+
+var OSM =
+/*@__PURE__*/
+function (XYZ) {
+  function OSM(opt_options) {
+    var options = opt_options || {};
+    var attributions;
+
+    if (options.attributions !== undefined) {
+      attributions = options.attributions;
+    } else {
+      attributions = [ATTRIBUTION];
+    }
+
+    var crossOrigin = options.crossOrigin !== undefined ? options.crossOrigin : 'anonymous';
+    var url = options.url !== undefined ? options.url : 'https://{a-c}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    XYZ.call(this, {
+      attributions: attributions,
+      cacheSize: options.cacheSize,
+      crossOrigin: crossOrigin,
+      opaque: options.opaque !== undefined ? options.opaque : true,
+      maxZoom: options.maxZoom !== undefined ? options.maxZoom : 19,
+      reprojectionErrorThreshold: options.reprojectionErrorThreshold,
+      tileLoadFunction: options.tileLoadFunction,
+      url: url,
+      wrapX: options.wrapX,
+      attributionsCollapsible: false
+    });
+  }
+
+  if (XYZ) OSM.__proto__ = XYZ;
+  OSM.prototype = Object.create(XYZ && XYZ.prototype);
+  OSM.prototype.constructor = OSM;
+  return OSM;
+}(_XYZ.default);
+
+var _default = OSM; //# sourceMappingURL=OSM.js.map
+
+exports.default = _default;
+},{"./XYZ.js":"4e4W"}],"y5uw":[function(require,module,exports) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -61231,7 +63187,72 @@ function writePolygonGeometry(geometry, opt_options) {
 var _default = GeoJSON; //# sourceMappingURL=GeoJSON.js.map
 
 exports.default = _default;
-},{"../asserts.js":"hgi2","../Feature.js":"cEtg","./Feature.js":"y5uw","./JSONFeature.js":"h5iq","../geom/GeometryCollection.js":"wCPW","../geom/LineString.js":"ArTU","../geom/MultiLineString.js":"YkYz","../geom/MultiPoint.js":"U+xV","../geom/MultiPolygon.js":"0Zcr","../geom/Point.js":"/fTq","../geom/Polygon.js":"kEvS","../obj.js":"lPyT","../proj.js":"bkYg","../geom/GeometryType.js":"qBtD"}],"v41l":[function(require,module,exports) {
+},{"../asserts.js":"hgi2","../Feature.js":"cEtg","./Feature.js":"y5uw","./JSONFeature.js":"h5iq","../geom/GeometryCollection.js":"wCPW","../geom/LineString.js":"ArTU","../geom/MultiLineString.js":"YkYz","../geom/MultiPoint.js":"U+xV","../geom/MultiPolygon.js":"0Zcr","../geom/Point.js":"/fTq","../geom/Polygon.js":"kEvS","../obj.js":"lPyT","../proj.js":"bkYg","../geom/GeometryType.js":"qBtD"}],"QN0b":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _Vector = _interopRequireDefault(require("ol/layer/Vector"));
+
+var _Tile = _interopRequireDefault(require("ol/layer/Tile"));
+
+var _Image = _interopRequireDefault(require("ol/layer/Image"));
+
+var _Vector2 = _interopRequireDefault(require("ol/source/Vector"));
+
+var _XYZ = _interopRequireDefault(require("ol/source/XYZ"));
+
+var _OSM = _interopRequireDefault(require("ol/source/OSM"));
+
+var _GeoJSON = _interopRequireDefault(require("ol/format/GeoJSON"));
+
+var _Fill = _interopRequireDefault(require("ol/style/Fill"));
+
+var _Style = _interopRequireDefault(require("ol/style/Style"));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+// layers
+// sources
+// formats
+// style
+// Layers
+var adm0 = new _Vector2.default({
+  url: '/assets/data/adm0_eSwatini.geojson',
+  format: new _GeoJSON.default()
+});
+var lyrs = {
+  hotosm: new _Tile.default({
+    source: new _XYZ.default({
+      url: "https://{a-c}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
+    })
+  }),
+  bounds_clip: new _Vector.default({
+    source: adm0,
+    renderMode: 'image',
+    style: new _Style.default({
+      fill: new _Fill.default({
+        color: 'white'
+      })
+    })
+  }),
+  swazi_bounds: new _Vector.default({
+    source: adm0
+  })
+}; // https://gis.stackexchange.com/questions/185881/clipping-tilelayer-with-georeferenced-polygon-clipping-mask/239136
+
+lyrs['bounds_clip'].on('precompose', function (e) {
+  e.context.globalCompositeOperation = 'destination-in';
+});
+lyrs['bounds_clip'].on('postcompose', function (e) {
+  e.context.globalCompositeOperation = 'source-over';
+});
+var _default = lyrs;
+exports.default = _default;
+},{"ol/layer/Vector":"BGzd","ol/layer/Tile":"tAJs","ol/layer/Image":"cgpj","ol/source/Vector":"s9D1","ol/source/XYZ":"4e4W","ol/source/OSM":"pFtY","ol/format/GeoJSON":"Xkfr","ol/style/Fill":"wPtA","ol/style/Style":"ERCw"}],"v41l":[function(require,module,exports) {
 // 7.2.1 RequireObjectCoercible(argument)
 module.exports = function (it) {
   if (it == undefined) throw TypeError("Can't call method on  " + it);
@@ -82309,7 +84330,7 @@ function numberIsNaN (obj) {
 },{"base64-js":"5QAn","ieee754":"O1Qa","buffer":"8fe9"}],"NEID":[function(require,module,exports) {
 module.exports=function(e){function t(n){if(r[n])return r[n].exports;var a=r[n]={i:n,l:!1,exports:{}};return e[n].call(a.exports,a,a.exports,t),a.l=!0,a.exports}var r={};return t.m=e,t.c=r,t.d=function(e,r,n){t.o(e,r)||Object.defineProperty(e,r,{configurable:!1,enumerable:!0,get:n})},t.n=function(e){var r=e&&e.__esModule?function(){return e.default}:function(){return e};return t.d(r,"a",r),r},t.o=function(e,t){return Object.prototype.hasOwnProperty.call(e,t)},t.p="",t(t.s=25)}([function(e,t){e.exports=require("babel-runtime/core-js/object/keys")},function(e,t){e.exports=require("babel-runtime/helpers/typeof")},function(e,t){e.exports=require("babel-runtime/core-js/object/assign")},function(e,t){e.exports=require("babel-runtime/helpers/extends")},function(e,t){e.exports=require("babel-runtime/regenerator")},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e){var t=e.openapi;return!!t&&(0,x.default)(t,"3")}function u(e){var t=e.swagger;return!!t&&(0,x.default)(t,"2")}function o(e,t){var r=arguments.length>2&&void 0!==arguments[2]?arguments[2]:"",n=arguments.length>3&&void 0!==arguments[3]?arguments[3]:{},a=n.v2OperationIdCompatibilityMode;return e&&"object"===(void 0===e?"undefined":(0,y.default)(e))?(e.operationId||"").replace(/\s/g,"").length?k(e.operationId):i(t,r,{v2OperationIdCompatibilityMode:a}):null}function i(e,t){if((arguments.length>2&&void 0!==arguments[2]?arguments[2]:{}).v2OperationIdCompatibilityMode){var r=(t.toLowerCase()+"_"+e).replace(/[\s!@#$%^&*()_+=[{\]};:<>|.\/?,\\'""-]/g,"_");return r=r||e.substring(1)+"_"+t,r.replace(/((_){2,})/g,"_").replace(/^(_)*/g,"").replace(/([_])*$/g,"")}return""+P(t)+k(e)}function s(e,t){return P(t)+"-"+e}function l(e,t){return e&&e.paths?c(e,function(e){var r=e.pathName,n=e.method,a=e.operation;if(!a||"object"!==(void 0===a?"undefined":(0,y.default)(a)))return!1;var u=a.operationId;return[o(a,r,n),s(r,n),u].some(function(e){return e&&e===t})}):null}function c(e,t){return f(e,t,!0)||null}function f(e,t,r){if(!e||"object"!==(void 0===e?"undefined":(0,y.default)(e))||!e.paths||"object"!==(0,y.default)(e.paths))return null;var n=e.paths;for(var a in n)for(var u in n[a])if("PARAMETERS"!==u.toUpperCase()){var o=n[a][u];if(o&&"object"===(void 0===o?"undefined":(0,y.default)(o))){var i={spec:e,pathName:a,method:u.toUpperCase(),operation:o},s=t(i);if(r&&s)return i}}}function p(e){var t=e.spec,r=t.paths,n={};if(!r||t.$$normalized)return e;for(var a in r){var u=r[a];if((0,g.default)(u)){var i=u.parameters;for(var s in u){(function(e){var r=u[e];if(!(0,g.default)(r))return"continue";var s=o(r,a,e);if(s){n[s]?n[s].push(r):n[s]=[r];var l=n[s];if(l.length>1)l.forEach(function(e,t){e.__originalOperationId=e.__originalOperationId||e.operationId,e.operationId=""+s+(t+1)});else if(void 0!==r.operationId){var c=l[0];c.__originalOperationId=c.__originalOperationId||r.operationId,c.operationId=s}}if("parameters"!==e){var f=[],p={};for(var d in t)"produces"!==d&&"consumes"!==d&&"security"!==d||(p[d]=t[d],f.push(p));if(i&&(p.parameters=i,f.push(p)),f.length){var v=!0,y=!1,m=void 0;try{for(var b,x=(0,h.default)(f);!(v=(b=x.next()).done);v=!0){var P=b.value;for(var k in P)if(r[k]){if("parameters"===k){var w=!0,_=!1,O=void 0;try{for(var q,M=(0,h.default)(P[k]);!(w=(q=M.next()).done);w=!0)!function(){var e=q.value;r[k].some(function(t){return t.name&&t.name===e.name||t.$ref&&t.$ref===e.$ref||t.$$ref&&t.$$ref===e.$$ref||t===e})||r[k].push(e)}()}catch(e){_=!0,O=e}finally{try{!w&&M.return&&M.return()}finally{if(_)throw O}}}}else r[k]=P[k]}}catch(e){y=!0,m=e}finally{try{!v&&x.return&&x.return()}finally{if(y)throw m}}}}})(s)}}}return t.$$normalized=!0,e}Object.defineProperty(t,"__esModule",{value:!0});var d=r(20),h=n(d),v=r(1),y=n(v);t.isOAS3=a,t.isSwagger2=u,t.opId=o,t.idFromPathMethod=i,t.legacyIdFromPathMethod=s,t.getOperationRaw=l,t.findOperation=c,t.eachOperation=f,t.normalizeSwagger=p;var m=r(48),g=n(m),b=r(15),x=n(b),P=function(e){return String.prototype.toLowerCase.call(e)},k=function(e){return e.replace(/[^\w]/gi,"_")}},function(e,t){e.exports=require("lodash/assign")},function(e,t){e.exports=require("url")},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e,t){return t&&(0===t.indexOf("application/json")||t.indexOf("+json")>0)?JSON.parse(e):M.default.safeLoad(e)}function u(e,t){var r=arguments.length>2&&void 0!==arguments[2]?arguments[2]:{},n=r.loadSpec,u=void 0!==n&&n,i={ok:e.ok,url:e.url||t,status:e.status,statusText:e.statusText,headers:o(e.headers)},s=i.headers["content-type"],l=u||I(s);return(l?e.text:e.blob||e.buffer).call(e).then(function(e){if(i.text=e,i.data=e,l)try{var t=a(e,s);i.body=t,i.obj=t}catch(e){i.parseError=e}return i})}function o(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:{},t={};return"function"==typeof e.forEach?(e.forEach(function(e,r){void 0!==t[r]?(t[r]=Array.isArray(t[r])?t[r]:[t[r]],t[r].push(e)):t[r]=e}),t):t}function i(e,t){return t||"undefined"==typeof navigator||(t=navigator),t&&"ReactNative"===t.product?!(!e||"object"!==(void 0===e?"undefined":(0,P.default)(e))||"string"!=typeof e.uri):"undefined"!=typeof File?e instanceof File:null!==e&&"object"===(void 0===e?"undefined":(0,P.default)(e))&&"function"==typeof e.pipe}function s(e,t){var r=e.collectionFormat,n=e.allowEmptyValue,a="object"===(void 0===e?"undefined":(0,P.default)(e))?e.value:e,u={csv:",",ssv:"%20",tsv:"%09",pipes:"|"};if(void 0===a&&n)return"";if(i(a)||"boolean"==typeof a)return a;var o=encodeURIComponent;return t&&(o=(0,A.default)(a)?function(e){return e}:function(e){return(0,m.default)(e)}),"object"!==(void 0===a?"undefined":(0,P.default)(a))||Array.isArray(a)?Array.isArray(a)?Array.isArray(a)&&!r?a.map(o).join(","):"multi"===r?a.map(o):a.map(o).join(u[r]):o(a):""}function l(e){var t=(0,v.default)(e).reduce(function(t,r){var n=e[r],a=!!n.skipEncoding,u=a?r:encodeURIComponent(r),o=function(e){return e&&"object"===(void 0===e?"undefined":(0,P.default)(e))}(n)&&!Array.isArray(n);return t[u]=s(o?n:{value:n},a),t},{});return O.default.stringify(t,{encode:!1,indices:!1})||""}function c(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:{},t=e.url,n=void 0===t?"":t,a=e.query,u=e.form;if(u){var o=(0,v.default)(u).some(function(e){return i(u[e].value)}),c=e.headers["content-type"]||e.headers["Content-Type"];if(o||/multipart\/form-data/i.test(c)){var f=r(31);e.body=new f,(0,v.default)(u).forEach(function(t){e.body.append(t,s(u[t],!0))})}else e.body=l(u);delete e.form}if(a){var p=n.split("?"),h=(0,d.default)(p,2),y=h[0],m=h[1],g="";if(m){var b=O.default.parse(m);(0,v.default)(a).forEach(function(e){return delete b[e]}),g=O.default.stringify(b,{encode:!0})}var x=function(){for(var e=arguments.length,t=Array(e),r=0;r<e;r++)t[r]=arguments[r];var n=t.filter(function(e){return e}).join("&");return n?"?"+n:""}(g,l(a));e.url=y+x,delete e.query}return e}function f(e,t,r){return r=r||function(e){return e},t=t||function(e){return e},function(n){return"string"==typeof n&&(n={url:n}),C.mergeInQueryOrForm(n),n=t(n),r(e(n))}}Object.defineProperty(t,"__esModule",{value:!0}),t.shouldDownloadAsText=t.self=void 0;var p=r(16),d=n(p),h=r(0),v=n(h),y=r(9),m=n(y),g=r(4),b=n(g),x=r(1),P=n(x),k=r(11),w=n(k);t.serializeRes=u,t.serializeHeaders=o,t.isFile=i,t.encodeFormOrQuery=l,t.mergeInQueryOrForm=c,t.makeHttp=f,r(28);var _=r(29),O=n(_),q=r(17),M=n(q),j=r(30),A=n(j),C=t.self={serializeRes:u,mergeInQueryOrForm:c};t.default=function(){function e(e){return t.apply(this,arguments)}var t=(0,w.default)(b.default.mark(function e(t){var r,n,a,u,o=arguments.length>1&&void 0!==arguments[1]?arguments[1]:{};return b.default.wrap(function(e){for(;;)switch(e.prev=e.next){case 0:if("object"===(void 0===t?"undefined":(0,P.default)(t))&&(o=t,t=o.url),o.headers=o.headers||{},C.mergeInQueryOrForm(o),!o.requestInterceptor){e.next=10;break}return e.next=6,o.requestInterceptor(o);case 6:if(e.t0=e.sent,e.t0){e.next=9;break}e.t0=o;case 9:o=e.t0;case 10:return r=o.headers["content-type"]||o.headers["Content-Type"],/multipart\/form-data/i.test(r)&&(delete o.headers["content-type"],delete o.headers["Content-Type"]),n=void 0,e.prev=13,e.next=16,(o.userFetch||fetch)(o.url,o);case 16:return n=e.sent,e.next=19,C.serializeRes(n,t,o);case 19:if(n=e.sent,!o.responseInterceptor){e.next=27;break}return e.next=23,o.responseInterceptor(n);case 23:if(e.t1=e.sent,e.t1){e.next=26;break}e.t1=n;case 26:n=e.t1;case 27:e.next=37;break;case 29:if(e.prev=29,e.t2=e.catch(13),n){e.next=33;break}throw e.t2;case 33:throw a=new Error(n.statusText),a.statusCode=a.status=n.status,a.responseError=e.t2,a;case 37:if(n.ok){e.next=42;break}throw u=new Error(n.statusText),u.statusCode=u.status=n.status,u.response=n,u;case 42:return e.abrupt("return",n);case 43:case"end":return e.stop()}},e,this,[[13,29]])}));return e}();var I=t.shouldDownloadAsText=function(){return/(json|xml|yaml|text)\b/.test(arguments.length>0&&void 0!==arguments[0]?arguments[0]:"")}},function(e,t){e.exports=require("babel-runtime/core-js/json/stringify")},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e,t,r){if(r=r||{},t=(0,U.default)({},t,{path:t.path&&u(t.path)}),"merge"===t.op){var n=T(e,t.path);(0,U.default)(n,t.value),V.default.applyPatch(e,[i(t.path,n)])}else if("mergeDeep"===t.op){var a=T(e,t.path);for(var o in t.value){var s=t.value[o],l=Array.isArray(s);if(l){var c=a[o]||[];a[o]=c.concat(s)}else if(w(s)&&!l){var f=(0,U.default)({},a[o]);for(var p in s){if(Object.prototype.hasOwnProperty.call(f,p)){f=(0,W.default)((0,Y.default)({},f),s);break}(0,U.default)(f,(0,B.default)({},p,s[p]))}a[o]=f}else a[o]=s}}else if("add"===t.op&&""===t.path&&w(t.value)){var d=(0,$.default)(t.value).reduce(function(e,r){return e.push({op:"add",path:"/"+u(r),value:t.value[r]}),e},[]);V.default.applyPatch(e,d)}else if("replace"===t.op&&""===t.path){var h=t.value;r.allowMetaPatches&&t.meta&&C(t)&&(Array.isArray(t.value)||w(t.value))&&(h=(0,U.default)({},h,t.meta)),e=h}else if(V.default.applyPatch(e,[t]),r.allowMetaPatches&&t.meta&&C(t)&&(Array.isArray(t.value)||w(t.value))){var v=T(e,t.path),y=(0,U.default)({},v,t.meta);V.default.applyPatch(e,[i(t.path,y)])}return e}function u(e){return Array.isArray(e)?e.length<1?"":"/"+e.map(function(e){return(e+"").replace(/~/g,"~0").replace(/\//g,"~1")}).join("/"):e}function o(e,t){return{op:"add",path:e,value:t}}function i(e,t,r){return{op:"replace",path:e,value:t,meta:r}}function s(e,t){return{op:"remove",path:e}}function l(e,t){return{type:"mutation",op:"merge",path:e,value:t}}function c(e,t){return{type:"mutation",op:"mergeDeep",path:e,value:t}}function f(e,t){return{type:"context",path:e,value:t}}function p(e,t){try{return h(e,y,t)}catch(e){return e}}function d(e,t){try{return h(e,v,t)}catch(e){return e}}function h(e,t,r){return k(P(e.filter(C).map(function(e){return t(e.value,r,e.path)})||[]))}function v(e,t,r){return r=r||[],Array.isArray(e)?e.map(function(e,n){return v(e,t,r.concat(n))}):w(e)?(0,$.default)(e).map(function(n){return v(e[n],t,r.concat(n))}):t(e,r[r.length-1],r)}function y(e,t,r){r=r||[];var n=[];if(r.length>0){var a=t(e,r[r.length-1],r);a&&(n=n.concat(a))}if(Array.isArray(e)){var u=e.map(function(e,n){return y(e,t,r.concat(n))});u&&(n=n.concat(u))}else if(w(e)){var o=(0,$.default)(e).map(function(n){return y(e[n],t,r.concat(n))});o&&(n=n.concat(o))}return n=P(n)}function m(e,t){if(!Array.isArray(t))return!1;for(var r=0,n=t.length;r<n;r++)if(t[r]!==e[r])return!1;return!0}function g(e,t){return t.reduce(function(e,t){return void 0!==t&&e?e[t]:e},e)}function b(e){return k(P(x(e)))}function x(e){return Array.isArray(e)?e:[e]}function P(e){var t;return(t=[]).concat.apply(t,(0,D.default)(e.map(function(e){return Array.isArray(e)?P(e):e})))}function k(e){return e.filter(function(e){return void 0!==e})}function w(e){return e&&"object"===(void 0===e?"undefined":(0,F.default)(e))}function _(e){return w(e)&&O(e.then)}function O(e){return e&&"function"==typeof e}function q(e){return e instanceof Error}function M(e){if(E(e)){var t=e.op;return"add"===t||"remove"===t||"replace"===t}return!1}function j(e){return G.default.isGeneratorFunction(e)}function A(e){return M(e)||E(e)&&"mutation"===e.type}function C(e){return A(e)&&("add"===e.op||"replace"===e.op||"merge"===e.op||"mergeDeep"===e.op)}function I(e){return E(e)&&"context"===e.type}function E(e){return e&&"object"===(void 0===e?"undefined":(0,F.default)(e))}function T(e,t){try{return V.default.getValueByPointer(e,t)}catch(e){return console.error(e),{}}}Object.defineProperty(t,"__esModule",{value:!0});var S=r(1),F=n(S),N=r(12),D=n(N),R=r(0),$=n(R),z=r(35),B=n(z),H=r(2),U=n(H),L=r(36),V=n(L),J=r(4),G=n(J),Q=r(37),W=n(Q),K=r(38),Y=n(K);t.default={add:o,replace:i,remove:s,merge:l,mergeDeep:c,context:f,getIn:g,applyPatch:a,parentPathMatch:m,flatten:P,fullyNormalizeArray:b,normalizeArray:x,isPromise:_,forEachNew:p,forEachNewPrimitive:d,isJsonPatch:M,isContextPatch:I,isPatch:E,isMutation:A,isAdditiveMutation:C,isGenerator:j,isFunction:O,isObject:w,isError:q},e.exports=t.default},function(e,t){e.exports=require("babel-runtime/helpers/asyncToGenerator")},function(e,t){e.exports=require("babel-runtime/helpers/toConsumableArray")},function(e,t){e.exports=require("lodash/get")},function(e,t){e.exports=require("btoa")},function(e,t){e.exports=require("lodash/startsWith")},function(e,t){e.exports=require("babel-runtime/helpers/slicedToArray")},function(e,t){e.exports=require("@kyleshockey/js-yaml")},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e){var t=arguments.length>1&&void 0!==arguments[1]?arguments[1]:{},r=t.requestInterceptor,n=t.responseInterceptor,a=e.withCredentials?"include":"same-origin";return function(t){return e({url:t,loadSpec:!0,requestInterceptor:r,responseInterceptor:n,headers:{Accept:"application/json"},credentials:a}).then(function(e){return e.body})}}function u(){d.plugins.refs.clearCache()}function o(e){function t(e){var t=this;w&&(d.plugins.refs.docCache[w]=e),d.plugins.refs.fetchJSON=a(k,{requestInterceptor:g,responseInterceptor:b});var r=[d.plugins.refs];return"function"==typeof m&&r.push(d.plugins.parameters),"function"==typeof y&&r.push(d.plugins.properties),"strict"!==o&&r.push(d.plugins.allOf),(0,h.default)({spec:e,context:{baseDoc:w},plugins:r,allowMetaPatches:l,pathDiscriminator:f,parameterMacro:m,modelPropertyMacro:y,useCircularStructures:P}).then(x?function(){var e=(0,c.default)(s.default.mark(function e(r){return s.default.wrap(function(e){for(;;)switch(e.prev=e.next){case 0:return e.abrupt("return",r);case 1:case"end":return e.stop()}},e,t)}));return function(t){return e.apply(this,arguments)}}():v.normalizeSwagger)}var r=e.fetch,n=e.spec,u=e.url,o=e.mode,i=e.allowMetaPatches,l=void 0===i||i,f=e.pathDiscriminator,y=e.modelPropertyMacro,m=e.parameterMacro,g=e.requestInterceptor,b=e.responseInterceptor,x=e.skipNormalization,P=e.useCircularStructures,k=e.http,w=e.baseDoc;return w=w||u,k=r||k||p.default,n?t(n):a(k,{requestInterceptor:g,responseInterceptor:b})(w).then(t)}Object.defineProperty(t,"__esModule",{value:!0});var i=r(4),s=n(i),l=r(11),c=n(l);t.makeFetchJSON=a,t.clearCache=u,t.default=o;var f=r(8),p=n(f),d=r(32),h=n(d),v=r(5)},function(e,t){e.exports=require("babel-runtime/core-js/promise")},function(e,t){e.exports=require("babel-runtime/core-js/get-iterator")},function(e,t){e.exports=require("babel-runtime/helpers/classCallCheck")},function(e,t){e.exports=require("babel-runtime/helpers/createClass")},function(e,t,r){"use strict";function n(e,t){function r(){Error.captureStackTrace?Error.captureStackTrace(this,this.constructor):this.stack=(new Error).stack;for(var e=arguments.length,r=Array(e),n=0;n<e;n++)r[n]=arguments[n];this.message=r[0],t&&t.apply(this,r)}return r.prototype=new Error,r.prototype.name=e,r.prototype.constructor=r,r}Object.defineProperty(t,"__esModule",{value:!0}),t.default=n,e.exports=t.default},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e){var t=e[e.length-1],r=e[e.length-2],n=e.join("/");return v.indexOf(t)>-1&&-1===y.indexOf(r)||m.indexOf(n)>-1||g.some(function(e){return n.indexOf(e)>-1})}function u(e,t){var r=arguments.length>2&&void 0!==arguments[2]?arguments[2]:{},n=r.specmap,a=r.getBaseUrlForNodePath,u=void 0===a?function(e){return n.getContext([].concat((0,c.default)(t),(0,c.default)(e))).baseDoc}:a,i=r.targetKeys,s=void 0===i?["$ref","$$ref"]:i,l=[];return(0,p.default)(e).forEach(function(){if(s.indexOf(this.key)>-1){var e=this.path,r=t.concat(this.path),a=o(this.node,u(e));l.push(n.replace(r,a))}}),l}function o(e,t){var r=e.split("#"),n=(0,s.default)(r,2),a=n[0],u=n[1],o=h.default.resolve(a||"",t||"");return u?o+"#"+u:o}Object.defineProperty(t,"__esModule",{value:!0});var i=r(16),s=n(i),l=r(12),c=n(l);t.isFreelyNamed=a,t.generateAbsoluteRefPatches=u,t.absolutifyPointer=o;var f=r(43),p=n(f),d=r(7),h=n(d),v=["properties"],y=["properties"],m=["definitions","parameters","responses","securityDefinitions","components/schemas","components/responses","components/parameters","components/securitySchemes"],g=["schema/example","items/example"]},function(e,t,r){e.exports=r(26)},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e){var t=this,r=arguments.length>1&&void 0!==arguments[1]?arguments[1]:{};if("string"==typeof e?r.url=e:r=e,!(this instanceof a))return new a(r);(0,l.default)(this,r);var n=this.resolve().then(function(){return t.disableInterfaces||(0,l.default)(t,a.makeApisTagOperation(t)),t});return n.client=this,n}Object.defineProperty(t,"__esModule",{value:!0});var u=r(3),o=n(u),i=r(27),s=(n(i),r(6)),l=n(s),c=r(15),f=n(c),p=r(7),d=n(p),h=r(8),v=n(h),y=r(18),m=n(y),g=r(49),b=n(g),x=r(50),P=r(52),k=r(5);a.http=v.default,a.makeHttp=h.makeHttp.bind(null,a.http),a.resolve=m.default,a.resolveSubtree=b.default,a.execute=P.execute,a.serializeRes=h.serializeRes,a.serializeHeaders=h.serializeHeaders,a.clearCache=y.clearCache,a.parameterBuilders=P.PARAMETER_BUILDERS,a.makeApisTagOperation=x.makeApisTagOperation,a.buildRequest=P.buildRequest,a.helpers={opId:k.opId},a.prototype={http:v.default,execute:function(e){return this.applyDefaults(),a.execute((0,o.default)({spec:this.spec,http:this.http,securities:{authorized:this.authorizations},contextUrl:"string"==typeof this.url?this.url:void 0},e))},resolve:function(){var e=this;return a.resolve({spec:this.spec,url:this.url,allowMetaPatches:this.allowMetaPatches,useCircularStructures:this.useCircularStructures,requestInterceptor:this.requestInterceptor||null,responseInterceptor:this.responseInterceptor||null}).then(function(t){return e.originalSpec=e.spec,e.spec=t.spec,e.errors=t.errors,e})}},a.prototype.applyDefaults=function(){var e=this.spec,t=this.url;if(t&&(0,f.default)(t,"http")){var r=d.default.parse(t);e.host||(e.host=r.host),e.schemes||(e.schemes=[r.protocol.replace(":","")]),e.basePath||(e.basePath="/")}},t.default=a,e.exports=t.default},function(e,t){e.exports=require("lodash/cloneDeep")},function(e,t){e.exports=require("cross-fetch/polyfill")},function(e,t){e.exports=require("qs")},function(e,t){e.exports=require("lodash/isString")},function(e,t){e.exports=require("isomorphic-form-data")},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e){return new $(e).dispatch()}Object.defineProperty(t,"__esModule",{value:!0}),t.plugins=t.SpecMap=void 0;var u=r(9),o=n(u),i=r(1),s=n(i),l=r(19),c=n(l),f=r(4),p=n(f),d=r(0),h=n(d),v=r(20),y=n(v),m=r(33),g=n(m),b=r(2),x=n(b),P=r(21),k=n(P),w=r(22),_=n(w);t.default=a;var O=r(34),q=n(O),M=r(10),j=n(M),A=r(39),C=n(A),I=r(44),E=n(I),T=r(45),S=n(T),F=r(46),N=n(F),D=r(47),R=n(D),$=function(){function e(t){var r=this;(0,k.default)(this,e),(0,x.default)(this,{spec:"",debugLevel:"info",plugins:[],pluginHistory:{},errors:[],mutations:[],promisedPatches:[],state:{},patches:[],context:{},contextTree:new R.default,showDebug:!1,allPatches:[],pluginProp:"specMap",libMethods:(0,x.default)((0,g.default)(this),j.default,{getInstance:function(){return r}}),allowMetaPatches:!1},t),this.get=this._get.bind(this),this.getContext=this._getContext.bind(this),this.hasRun=this._hasRun.bind(this),this.wrappedPlugins=this.plugins.map(this.wrapPlugin.bind(this)).filter(j.default.isFunction),this.patches.push(j.default.add([],this.spec)),this.patches.push(j.default.context([],this.context)),this.updatePatches(this.patches)}return(0,_.default)(e,[{key:"debug",value:function(e){if(this.debugLevel===e){for(var t,r=arguments.length,n=Array(r>1?r-1:0),a=1;a<r;a++)n[a-1]=arguments[a];(t=console).log.apply(t,n)}}},{key:"verbose",value:function(e){if("verbose"===this.debugLevel){for(var t,r=arguments.length,n=Array(r>1?r-1:0),a=1;a<r;a++)n[a-1]=arguments[a];(t=console).log.apply(t,["["+e+"]   "].concat(n))}}},{key:"wrapPlugin",value:function(e,t){var r=this.pathDiscriminator,n=null,a=void 0;return e[this.pluginProp]?(n=e,a=e[this.pluginProp]):j.default.isFunction(e)?a=e:j.default.isObject(e)&&(a=function(e){var t=function(e,t){return!Array.isArray(e)||e.every(function(e,r){return e===t[r]})};return p.default.mark(function n(a,u){var o,i,s,l,c,f,d,v,m;return p.default.wrap(function(n){for(;;)switch(n.prev=n.next){case 0:m=function n(a,s,l){var c,f,d,v,m,g,b,x,P,k,w,_,O,q,M,A;return p.default.wrap(function(o){for(;;)switch(o.prev=o.next){case 0:if(j.default.isObject(a)){o.next=6;break}if(e.key!==s[s.length-1]){o.next=4;break}return o.next=4,e.plugin(a,e.key,s,u);case 4:o.next=48;break;case 6:c=s.length-1,f=s[c],d=s.indexOf("properties"),v="properties"===f&&c===d,m=u.allowMetaPatches&&i[a.$$ref],g=!0,b=!1,x=void 0,o.prev=14,P=(0,y.default)((0,h.default)(a));case 16:if(g=(k=P.next()).done){o.next=34;break}if(w=k.value,_=a[w],O=s.concat(w),q=j.default.isObject(_),M=a.$$ref,m){o.next=26;break}if(!q){o.next=26;break}return u.allowMetaPatches&&M&&(i[M]=!0),o.delegateYield(n(_,O,l),"t0",26);case 26:if(v||w!==e.key){o.next=31;break}if(A=t(r,s),r&&!A){o.next=31;break}return o.next=31,e.plugin(_,w,O,u,l);case 31:g=!0,o.next=16;break;case 34:o.next=40;break;case 36:o.prev=36,o.t1=o.catch(14),b=!0,x=o.t1;case 40:o.prev=40,o.prev=41,!g&&P.return&&P.return();case 43:if(o.prev=43,!b){o.next=46;break}throw x;case 46:return o.finish(43);case 47:return o.finish(40);case 48:case"end":return o.stop()}},o,this,[[14,36,40,48],[41,,43,47]])},o=p.default.mark(m),i={},s=!0,l=!1,c=void 0,n.prev=6,f=(0,y.default)(a.filter(j.default.isAdditiveMutation));case 8:if(s=(d=f.next()).done){n.next=14;break}return v=d.value,n.delegateYield(m(v.value,v.path,v),"t0",11);case 11:s=!0,n.next=8;break;case 14:n.next=20;break;case 16:n.prev=16,n.t1=n.catch(6),l=!0,c=n.t1;case 20:n.prev=20,n.prev=21,!s&&f.return&&f.return();case 23:if(n.prev=23,!l){n.next=26;break}throw c;case 26:return n.finish(23);case 27:return n.finish(20);case 28:case"end":return n.stop()}},n,this,[[6,16,20,28],[21,,23,27]])})}(e)),(0,x.default)(a.bind(n),{pluginName:e.name||t,isGenerator:j.default.isGenerator(a)})}},{key:"nextPlugin",value:function(){var e=this;return(0,q.default)(this.wrappedPlugins,function(t){return e.getMutationsForPlugin(t).length>0})}},{key:"nextPromisedPatch",value:function(){if(this.promisedPatches.length>0)return c.default.race(this.promisedPatches.map(function(e){return e.value}))}},{key:"getPluginHistory",value:function(e){var t=this.getPluginName(e);return this.pluginHistory[t]||[]}},{key:"getPluginRunCount",value:function(e){return this.getPluginHistory(e).length}},{key:"getPluginHistoryTip",value:function(e){var t=this.getPluginHistory(e);return t&&t[t.length-1]||{}}},{key:"getPluginMutationIndex",value:function(e){var t=this.getPluginHistoryTip(e).mutationIndex;return"number"!=typeof t?-1:t}},{key:"getPluginName",value:function(e){return e.pluginName}},{key:"updatePluginHistory",value:function(e,t){var r=this.getPluginName(e);(this.pluginHistory[r]=this.pluginHistory[r]||[]).push(t)}},{key:"updatePatches",value:function(e,t){var r=this;j.default.normalizeArray(e).forEach(function(e){if(e instanceof Error)return void r.errors.push(e);try{if(!j.default.isObject(e))return void r.debug("updatePatches","Got a non-object patch",e);if(r.showDebug&&r.allPatches.push(e),j.default.isPromise(e.value))return r.promisedPatches.push(e),void r.promisedPatchThen(e);if(j.default.isContextPatch(e))return void r.setContext(e.path,e.value);if(j.default.isMutation(e))return void r.updateMutations(e)}catch(e){console.error(e),r.errors.push(e)}})}},{key:"updateMutations",value:function(e){"object"===(0,s.default)(e.value)&&!Array.isArray(e.value)&&this.allowMetaPatches&&(e.value=(0,x.default)({},e.value));var t=j.default.applyPatch(this.state,e,{allowMetaPatches:this.allowMetaPatches});t&&(this.mutations.push(e),this.state=t)}},{key:"removePromisedPatch",value:function(e){var t=this.promisedPatches.indexOf(e);if(t<0)return void this.debug("Tried to remove a promisedPatch that isn't there!");this.promisedPatches.splice(t,1)}},{key:"promisedPatchThen",value:function(e){var t=this;return e.value=e.value.then(function(r){var n=(0,x.default)({},e,{value:r});t.removePromisedPatch(e),t.updatePatches(n)}).catch(function(r){t.removePromisedPatch(e),t.updatePatches(r)})}},{key:"getMutations",value:function(e,t){return e=e||0,"number"!=typeof t&&(t=this.mutations.length),this.mutations.slice(e,t)}},{key:"getCurrentMutations",value:function(){return this.getMutationsForPlugin(this.getCurrentPlugin())}},{key:"getMutationsForPlugin",value:function(e){var t=this.getPluginMutationIndex(e);return this.getMutations(t+1)}},{key:"getCurrentPlugin",value:function(){return this.currentPlugin}},{key:"getPatchesOfType",value:function(e,t){return e.filter(t)}},{key:"getLib",value:function(){return this.libMethods}},{key:"_get",value:function(e){return j.default.getIn(this.state,e)}},{key:"_getContext",value:function(e){return this.contextTree.get(e)}},{key:"setContext",value:function(e,t){return this.contextTree.set(e,t)}},{key:"_hasRun",value:function(e){return this.getPluginRunCount(this.getCurrentPlugin())>(e||0)}},{key:"_clone",value:function(e){return JSON.parse((0,o.default)(e))}},{key:"dispatch",value:function(){function e(e){e&&(e=j.default.fullyNormalizeArray(e),r.updatePatches(e,n))}var t=this,r=this,n=this.nextPlugin();if(!n){var a=this.nextPromisedPatch();if(a)return a.then(function(){return t.dispatch()}).catch(function(){return t.dispatch()});var u={spec:this.state,errors:this.errors};return this.showDebug&&(u.patches=this.allPatches),c.default.resolve(u)}if(r.pluginCount=r.pluginCount||{},r.pluginCount[n]=(r.pluginCount[n]||0)+1,r.pluginCount[n]>100)return c.default.resolve({spec:r.state,errors:r.errors.concat(new Error("We've reached a hard limit of 100 plugin runs"))});if(n!==this.currentPlugin&&this.promisedPatches.length){var o=this.promisedPatches.map(function(e){return e.value});return c.default.all(o.map(function(e){return e.then(Function,Function)})).then(function(){return t.dispatch()})}return function(){r.currentPlugin=n;var t=r.getCurrentMutations(),a=r.mutations.length-1;try{if(n.isGenerator){var u=!0,o=!1,i=void 0;try{for(var s,l=(0,y.default)(n(t,r.getLib()));!(u=(s=l.next()).done);u=!0){e(s.value)}}catch(e){o=!0,i=e}finally{try{!u&&l.return&&l.return()}finally{if(o)throw i}}}else{e(n(t,r.getLib()))}}catch(t){console.error(t),e([(0,x.default)((0,g.default)(t),{plugin:n})])}finally{r.updatePluginHistory(n,{mutationIndex:a})}return r.dispatch()}()}}]),e}(),z={refs:C.default,allOf:E.default,parameters:S.default,properties:N.default};t.SpecMap=$,t.plugins=z},function(e,t){e.exports=require("babel-runtime/core-js/object/create")},function(e,t){e.exports=require("lodash/find")},function(e,t){e.exports=require("babel-runtime/helpers/defineProperty")},function(e,t){e.exports=require("fast-json-patch")},function(e,t){e.exports=require("deep-extend")},function(e,t){e.exports=require("@kyleshockey/object-assign-deep")},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e,t){if(!B.test(e)){if(!t)throw new H("Tried to resolve a relative URL, without having a basePath. path: '"+e+"' basePath: '"+t+"'");return F.default.resolve(t,e)}return e}function u(e,t){var r=void 0;return r=e&&e.response&&e.response.body?e.response.body.code+" "+e.response.body.message:e.message,new H("Could not resolve reference: "+r,t,e)}function o(e){return(e+"").split("#")}function i(e,t){var r=U[e];if(r&&!D.default.isPromise(r))try{var n=f(t,r);return(0,j.default)(_.default.resolve(n),{__value:n})}catch(e){return _.default.reject(e)}return l(e).then(function(e){return f(t,e)})}function s(e){void 0!==e?delete U[e]:(0,k.default)(U).forEach(function(e){delete U[e]})}function l(e){var t=U[e];return t?D.default.isPromise(t)?t:_.default.resolve(t):(U[e]=J.fetchJSON(e).then(function(t){return U[e]=t,t}),U[e])}function c(e){return(0,A.fetch)(e,{headers:{Accept:"application/json, application/yaml"},loadSpec:!0}).then(function(e){return e.text()}).then(function(e){return I.default.safeLoad(e)})}function f(e,t){var r=p(e);if(r.length<1)return t;var n=D.default.getIn(t,r);if(void 0===n)throw new H("Could not resolve pointer: "+e+" does not exist in document",{pointer:e});return n}function p(e){if("string"!=typeof e)throw new TypeError("Expected a string, got a "+(void 0===e?"undefined":(0,x.default)(e)));return"/"===e[0]&&(e=e.substr(1)),""===e?[]:e.split("/").map(d)}function d(e){return"string"!=typeof e?e:T.default.unescape(e.replace(/~1/g,"/").replace(/~0/g,"~"))}function h(e){return T.default.escape(e.replace(/~/g,"~0").replace(/\//g,"~1"))}function v(e){return 0===e.length?"":"/"+e.map(h).join("/")}function y(e,t){if(G(t))return!0;var r=e.charAt(t.length),n=t.slice(-1);return 0===e.indexOf(t)&&(!r||"/"===r||"#"===r)&&"#"!==n}function m(e,t,r,n){var a=L.get(n);a||(a={},L.set(n,a));var u=v(r),o=(t||"<specmap-base>")+"#"+e,i=u.replace(/allOf\/\d+\/?/g,"");if(t==n.contextTree.get([]).baseDoc&&y(i,e))return!0;var s="";if(r.some(function(e){return s=s+"/"+h(e),a[s]&&a[s].some(function(e){return y(e,o)||y(o,e)})}))return!0;a[i]=(a[i]||[]).concat(o)}function g(e,t){function r(e){return D.default.isObject(e)&&(n.indexOf(e)>=0||(0,k.default)(e).some(function(t){return r(e[t])}))}var n=[e];return t.path.reduce(function(e,t){return n.push(e[t]),e[t]},e),r(t.value)}Object.defineProperty(t,"__esModule",{value:!0});var b=r(1),x=n(b),P=r(0),k=n(P),w=r(19),_=n(w),O=r(40),q=n(O),M=r(2),j=n(M),A=r(41),C=r(17),I=n(C),E=r(42),T=n(E),S=r(7),F=n(S),N=r(10),D=n(N),R=r(23),$=n(R),z=r(24),B=new RegExp("^([a-z]+://|//)","i"),H=(0,$.default)("JSONRefError",function(e,t,r){this.originalError=r,(0,j.default)(this,t||{})}),U={},L=new q.default,V={key:"$ref",plugin:function(e,t,r,n){var s=n.getInstance(),l=r.slice(0,-1);if(!(0,z.isFreelyNamed)(l)){var c=n.getContext(r).baseDoc;if("string"!=typeof e)return new H("$ref: must be a string (JSON-Ref)",{$ref:e,baseDoc:c,fullPath:r});var f=o(e),d=f[0],h=f[1]||"",v=void 0;try{v=c||d?a(d,c):null}catch(t){return u(t,{pointer:h,$ref:e,basePath:v,fullPath:r})}var y=void 0,b=void 0;if(m(h,v,l,n)&&!s.useCircularStructures){var x=(0,z.absolutifyPointer)(e,v);return e===x?null:D.default.replace(r,x)}if(null==v?(b=p(h),void 0===(y=n.get(b))&&(y=new H("Could not resolve reference: "+e,{pointer:h,$ref:e,baseDoc:c,fullPath:r}))):(y=i(v,h),y=null!=y.__value?y.__value:y.catch(function(t){throw u(t,{pointer:h,$ref:e,baseDoc:c,fullPath:r})})),y instanceof Error)return[D.default.remove(r),y];var P=(0,z.absolutifyPointer)(e,v),k=D.default.replace(l,y,{$$ref:P});if(v&&v!==c)return[k,D.default.context(l,{baseDoc:v})];try{if(!g(n.state,k)||s.useCircularStructures)return k}catch(e){return null}}}},J=(0,j.default)(V,{docCache:U,absoluteify:a,clearCache:s,JSONRefError:H,wrapError:u,getDoc:l,split:o,extractFromDoc:i,fetchJSON:c,extract:f,jsonPointerToArray:p,unescapeJsonPointerToken:d});t.default=J;var G=function(e){return!e||"/"===e||"#"===e};e.exports=t.default},function(e,t){e.exports=require("babel-runtime/core-js/weak-map")},function(e,t){e.exports=require("cross-fetch")},function(e,t){e.exports=require("querystring-browser")},function(e,t){e.exports=require("traverse")},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}Object.defineProperty(t,"__esModule",{value:!0});var a=r(12),u=n(a),o=r(2),i=n(o),s=r(24);t.default={key:"allOf",plugin:function(e,t,r,n,a){if(!a.meta||!a.meta.$$ref){var o=r.slice(0,-1);if(!(0,s.isFreelyNamed)(o)){if(!Array.isArray(e)){var l=new TypeError("allOf must be an array");return l.fullPath=r,l}var c=!1,f=a.value;o.forEach(function(e){f&&(f=f[e])}),f=(0,i.default)({},f),delete f.allOf;var p=[];return p.push(n.replace(o,{})),e.forEach(function(e,t){if(!n.isObject(e)){if(c)return null;c=!0;var a=new TypeError("Elements in allOf must be objects");return a.fullPath=r,p.push(a)}p.push(n.mergeDeep(o,e));var i=r.slice(0,-1),l=(0,s.generateAbsoluteRefPatches)(e,i,{getBaseUrlForNodePath:function(e){return n.getContext([].concat((0,u.default)(r),[t],(0,u.default)(e))).baseDoc},specmap:n});p.push.apply(p,(0,u.default)(l))}),p.push(n.mergeDeep(o,f)),f.$$ref||p.push(n.remove([].concat(o,"$$ref"))),p}}}},e.exports=t.default},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}Object.defineProperty(t,"__esModule",{value:!0});var a=r(2),u=n(a),o=r(10),i=n(o);t.default={key:"parameters",plugin:function(e,t,r,n,a){if(Array.isArray(e)&&e.length){var o=(0,u.default)([],e),s=r.slice(0,-1),l=(0,u.default)({},i.default.getIn(n.spec,s));return e.forEach(function(e,t){try{o[t].default=n.parameterMacro(l,e)}catch(e){var a=new Error(e);return a.fullPath=r,a}}),i.default.replace(r,o)}return i.default.replace(r,e)}},e.exports=t.default},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}Object.defineProperty(t,"__esModule",{value:!0});var a=r(2),u=n(a),o=r(10),i=n(o);t.default={key:"properties",plugin:function(e,t,r,n){var a=(0,u.default)({},e);for(var o in e)try{a[o].default=n.modelPropertyMacro(a[o])}catch(e){var s=new Error(e);return s.fullPath=r,s}return i.default.replace(r,a)}},e.exports=t.default},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e,t){return u({children:{}},e,t)}function u(e,t,r){return e.value=t||{},e.protoValue=r?(0,l.default)({},r.protoValue,e.value):e.value,(0,i.default)(e.children).forEach(function(t){var r=e.children[t];e.children[t]=u(r,r.value,e)}),e}Object.defineProperty(t,"__esModule",{value:!0});var o=r(0),i=n(o),s=r(3),l=n(s),c=r(21),f=n(c),p=r(22),d=n(p),h=function(){function e(t){(0,f.default)(this,e),this.root=a(t||{})}return(0,d.default)(e,[{key:"set",value:function(e,t){var r=this.getParent(e,!0);if(!r)return void u(this.root,t,null);var n=e[e.length-1],o=r.children;if(o[n])return void u(o[n],t,r);o[n]=a(t,r)}},{key:"get",value:function(e){if(e=e||[],e.length<1)return this.root.value;for(var t=this.root,r=void 0,n=void 0,a=0;a<e.length&&(n=e[a],r=t.children,r[n]);a++)t=r[n];return t&&t.protoValue}},{key:"getParent",value:function(e,t){return!e||e.length<1?null:e.length<2?this.root:e.slice(0,-1).reduce(function(e,r){if(!e)return e;var n=e.children;return!n[r]&&t&&(n[r]=a(null,e)),n[r]},this.root)}}]),e}();t.default=h,e.exports=t.default},function(e,t){e.exports=require("lodash/isObject")},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}Object.defineProperty(t,"__esModule",{value:!0});var a=r(4),u=n(a),o=r(3),i=n(o),s=r(11),l=n(s),c=r(13),f=n(c),p=r(18),d=n(p),h=r(5);t.default=function(){function e(e,r){return t.apply(this,arguments)}var t=(0,l.default)(u.default.mark(function e(t,r){var n,a,o,s,l,c,p,v,y,m,g,b=arguments.length>2&&void 0!==arguments[2]?arguments[2]:{};return u.default.wrap(function(e){for(;;)switch(e.prev=e.next){case 0:return n=b.returnEntireTree,a=b.baseDoc,o=b.requestInterceptor,s=b.responseInterceptor,l=b.parameterMacro,c=b.modelPropertyMacro,p=b.useCircularStructures,v={pathDiscriminator:r,baseDoc:a,requestInterceptor:o,responseInterceptor:s,parameterMacro:l,modelPropertyMacro:c,useCircularStructures:p},y=(0,h.normalizeSwagger)({spec:t}),m=y.spec,e.next=5,(0,d.default)((0,i.default)({},v,{spec:m,allowMetaPatches:!0,skipNormalization:!0}));case 5:return g=e.sent,!n&&Array.isArray(r)&&r.length&&(g.spec=(0,f.default)(g.spec,r)||null),e.abrupt("return",g);case 8:case"end":return e.stop()}},e,this)}));return e}(),e.exports=t.default},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:{};return function(t){var r=t.pathName,n=t.method,a=t.operationId;return function(t){var u=arguments.length>1&&void 0!==arguments[1]?arguments[1]:{};return e.execute((0,l.default)({spec:e.spec},(0,f.default)(e,"requestInterceptor","responseInterceptor","userFetch"),{pathName:r,method:n,parameters:t,operationId:a},u))}}}function u(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:{},t=v.makeExecute(e),r=v.mapTagOperations({v2OperationIdCompatibilityMode:e.v2OperationIdCompatibilityMode,spec:e.spec,cb:t}),n={};for(var a in r){n[a]={operations:{}};for(var u in r[a])n[a].operations[u]={execute:r[a][u]}}return{apis:n}}function o(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:{},t=v.makeExecute(e);return{apis:v.mapTagOperations({v2OperationIdCompatibilityMode:e.v2OperationIdCompatibilityMode,spec:e.spec,cb:t})}}function i(e){var t=e.spec,r=e.cb,n=void 0===r?d:r,a=e.defaultTag,u=void 0===a?"default":a,o=e.v2OperationIdCompatibilityMode,i={},s={};return(0,p.eachOperation)(t,function(e){var r=e.pathName,a=e.method,l=e.operation;(l.tags?h(l.tags):[u]).forEach(function(e){if("string"==typeof e){var u=s[e]=s[e]||{},c=(0,p.opId)(l,r,a,{v2OperationIdCompatibilityMode:o}),f=n({spec:t,pathName:r,method:a,operation:l,operationId:c});if(i[c])i[c]++,u[""+c+i[c]]=f;else if(void 0!==u[c]){var d=i[c]||1;i[c]=d+1,u[""+c+i[c]]=f;var h=u[c];delete u[c],u[""+c+d]=h}else u[c]=f}})}),s}Object.defineProperty(t,"__esModule",{value:!0}),t.self=void 0;var s=r(3),l=n(s);t.makeExecute=a,t.makeApisTagOperationsOperationExecute=u,t.makeApisTagOperation=o,t.mapTagOperations=i;var c=r(51),f=n(c),p=r(5),d=function(){return null},h=function(e){return Array.isArray(e)?e:[e]},v=t.self={mapTagOperations:i,makeExecute:a}},function(e,t){e.exports=require("lodash/pick")},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e){var t=e.http,r=e.fetch,n=e.spec,a=e.operationId,u=e.pathName,o=e.method,i=e.parameters,s=e.securities,l=(0,y.default)(e,["http","fetch","spec","operationId","pathName","method","parameters","securities"]),c=t||r||S.default;u&&o&&!a&&(a=(0,V.legacyIdFromPathMethod)(u,o));var f=K.buildRequest((0,h.default)({spec:n,operationId:a,parameters:i,securities:s,http:c},l));return f.body&&((0,O.default)(f.body)||(0,M.default)(f.body))&&(f.body=(0,p.default)(f.body)),c(f)}function u(e){var t=e.spec,r=e.operationId,n=(e.securities,e.requestContentType,e.responseContentType),a=e.scheme,u=e.requestInterceptor,i=e.responseInterceptor,s=e.contextUrl,l=e.userFetch,c=(e.requestBody,e.server),f=e.serverVariables,p=e.http,d=e.parameters,v=e.parameterBuilders,y=(0,V.isOAS3)(t);v||(v=y?z.default:R.default);var m=p&&p.withCredentials?"include":"same-origin",b={url:"",credentials:m,headers:{},cookies:{}};u&&(b.requestInterceptor=u),i&&(b.responseInterceptor=i),l&&(b.userFetch=l);var x=(0,V.getOperationRaw)(t,r);if(!x)throw new G("Operation "+r+" not found");var P=x.operation,k=void 0===P?{}:P,w=x.method,_=x.pathName;if(b.url+=o({spec:t,scheme:a,contextUrl:s,server:c,serverVariables:f,pathName:_,method:w}),!r)return delete b.cookies,b;b.url+=_,b.method=(""+w).toUpperCase(),d=d||{};var O=t.paths[_]||{};n&&(b.headers.accept=n);var q=W([].concat(J(k.parameters)).concat(J(O.parameters)));q.forEach(function(e){var r=v[e.in],n=void 0;if("body"===e.in&&e.schema&&e.schema.properties&&(n=d),n=e&&e.name&&d[e.name],void 0===n?n=e&&e.name&&d[e.in+"."+e.name]:Q(e.name,q).length>1&&console.warn("Parameter '"+e.name+"' is ambiguous because the defined spec has more than one parameter with the name: '"+e.name+"' and the passed-in parameter values did not define an 'in' value."),null!==n){if(void 0!==e.default&&void 0===n&&(n=e.default),void 0===n&&e.required&&!e.allowEmptyValue)throw new Error("Required parameter "+e.name+" is not provided");if(y&&e.schema&&"object"===e.schema.type&&"string"==typeof n)try{n=JSON.parse(n)}catch(e){throw new Error("Could not parse object parameter value string as JSON")}r&&r({req:b,parameter:e,value:n,operation:k,spec:t})}});var M=(0,h.default)({},e,{operation:k});if(b=y?(0,H.default)(M,b):(0,L.default)(M,b),b.cookies&&(0,g.default)(b.cookies).length){var j=(0,g.default)(b.cookies).reduce(function(e,t){var r=b.cookies[t];return e+(e?"&":"")+E.default.serialize(t,r)},"");b.headers.Cookie=j}return b.cookies&&delete b.cookies,(0,T.mergeInQueryOrForm)(b),b}function o(e){return(0,V.isOAS3)(e.spec)?i(e):c(e)}function i(e){var t=e.spec,r=e.pathName,n=e.method,a=e.server,u=e.contextUrl,o=e.serverVariables,i=void 0===o?{}:o,c=(0,w.default)(t,["paths",r,(n||"").toLowerCase(),"servers"])||(0,w.default)(t,["paths",r,"servers"])||(0,w.default)(t,["servers"]),f="",p=null;if(a&&c&&c.length){var d=c.map(function(e){return e.url});d.indexOf(a)>-1&&(f=a,p=c[d.indexOf(a)])}if(!f&&c&&c.length&&(f=c[0].url,p=c[0]),f.indexOf("{")>-1){l(f).forEach(function(e){if(p.variables&&p.variables[e]){var t=p.variables[e],r=i[e]||t.default,n=new RegExp("{"+e+"}","g");f=f.replace(n,r)}})}return s(f,u)}function s(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:"",t=arguments.length>1&&void 0!==arguments[1]?arguments[1]:"",r=C.default.parse(e),n=C.default.parse(t),a=Y(r.protocol)||Y(n.protocol)||"",u=r.host||n.host,o=r.pathname||"",i=void 0;return i=a&&u?a+"://"+(u+o):o,"/"===i[i.length-1]?i.slice(0,-1):i}function l(e){for(var t=[],r=/{([^}]+)}/g,n=void 0;n=r.exec(e);)t.push(n[1]);return t}function c(e){var t=e.spec,r=e.scheme,n=e.contextUrl,a=void 0===n?"":n,u=C.default.parse(a),o=Array.isArray(t.schemes)?t.schemes[0]:null,i=r||o||Y(u.protocol)||"http",s=t.host||u.host||"",l=t.basePath||"",c=void 0;return c=i&&s?i+"://"+(s+l):l,"/"===c[c.length-1]?c.slice(0,-1):c}Object.defineProperty(t,"__esModule",{value:!0}),t.self=void 0;var f=r(9),p=n(f),d=r(3),h=n(d),v=r(53),y=n(v),m=r(0),g=n(m),b=r(2),x=n(b);t.execute=a,t.buildRequest=u,t.baseUrl=o;var P=r(6),k=(n(P),r(13)),w=n(k),_=r(54),O=n(_),q=r(55),M=n(q),j=r(14),A=(n(j),r(7)),C=n(A),I=r(56),E=n(I),T=r(8),S=n(T),F=r(23),N=n(F),D=r(57),R=n(D),$=r(58),z=n($),B=r(63),H=n(B),U=r(65),L=n(U),V=r(5),J=function(e){return Array.isArray(e)?e:[]},G=(0,N.default)("OperationNotFoundError",function(e,t,r){this.originalError=r,(0,x.default)(this,t||{})}),Q=function(e,t){return t.filter(function(t){return t.name===e})},W=function(e){var t={};e.forEach(function(e){t[e.in]||(t[e.in]={}),t[e.in][e.name]=e});var r=[];return(0,g.default)(t).forEach(function(e){(0,g.default)(t[e]).forEach(function(n){r.push(t[e][n])})}),r},K=t.self={buildRequest:u},Y=function(e){return e?e.replace(/\W/g,""):null}},function(e,t){e.exports=require("babel-runtime/helpers/objectWithoutProperties")},function(e,t){e.exports=require("lodash/isPlainObject")},function(e,t){e.exports=require("lodash/isArray")},function(e,t){e.exports=require("cookie")},function(e,t,r){"use strict";function n(e){var t=e.req,r=e.value;t.body=r}function a(e){var t=e.req,r=e.value,n=e.parameter;(r||n.allowEmptyValue)&&(t.form=t.form||{},t.form[n.name]={value:r,allowEmptyValue:n.allowEmptyValue,collectionFormat:n.collectionFormat})}function u(e){var t=e.req,r=e.parameter,n=e.value;t.headers=t.headers||{},void 0!==n&&(t.headers[r.name]=n)}function o(e){var t=e.req,r=e.value,n=e.parameter;t.url=t.url.split("{"+n.name+"}").join(encodeURIComponent(r))}function i(e){var t=e.req,r=e.value,n=e.parameter;if(t.query=t.query||{},!1===r&&"boolean"===n.type&&(r="false"),0===r&&["number","integer"].indexOf(n.type)>-1&&(r="0"),r)t.query[n.name]={collectionFormat:n.collectionFormat,value:r};else if(n.allowEmptyValue&&void 0!==r){var a=n.name;t.query[a]=t.query[a]||{},t.query[a].allowEmptyValue=!0}}Object.defineProperty(t,"__esModule",{value:!0}),t.default={body:n,header:u,query:i,path:o,formData:a},e.exports=t.default},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e){var t=e.req,r=e.value,n=e.parameter,a=n.name,u=n.style,o=n.explode,i=(0,d.default)({key:n.name,value:r,style:u||"simple",explode:o||!1,escape:!0});t.url=t.url.split("{"+a+"}").join(i)}function u(e){var t=e.req,r=e.value,n=e.parameter;if(t.query=t.query||{},!1===r&&(r="false"),0===r&&(r="0"),r){var a=void 0===r?"undefined":(0,f.default)(r);if("deepObject"===n.style){(0,l.default)(r).forEach(function(e){var a=r[e];t.query[n.name+"["+e+"]"]={value:(0,d.default)({key:e,value:a,style:"deepObject",escape:n.allowReserved?"unsafe":"reserved"}),skipEncoding:!0}})}else if("object"!==a||Array.isArray(r)||"form"!==n.style&&n.style||!n.explode&&void 0!==n.explode)t.query[n.name]={value:(0,d.default)({key:n.name,value:r,style:n.style||"form",explode:void 0===n.explode||n.explode,escape:n.allowReserved?"unsafe":"reserved"}),skipEncoding:!0};else{var u=(0,l.default)(r);u.forEach(function(e){var a=r[e];t.query[e]={value:(0,d.default)({key:e,value:a,style:n.style||"form",escape:n.allowReserved?"unsafe":"reserved"}),skipEncoding:!0}})}}else if(n.allowEmptyValue&&void 0!==r){var o=n.name;t.query[o]=t.query[o]||{},t.query[o].allowEmptyValue=!0}}function o(e){var t=e.req,r=e.parameter,n=e.value;t.headers=t.headers||{},h.indexOf(r.name.toLowerCase())>-1||void 0!==n&&(t.headers[r.name]=(0,d.default)({key:r.name,value:n,style:r.style||"simple",explode:void 0!==r.explode&&r.explode,escape:!1}))}function i(e){var t=e.req,r=e.parameter,n=e.value;t.headers=t.headers||{};var a=void 0===n?"undefined":(0,f.default)(n);if("undefined"!==a){var u="object"===a&&!Array.isArray(n)&&r.explode?"":r.name+"=";t.headers.Cookie=u+(0,d.default)({key:r.name,value:n,escape:!1,style:r.style||"form",explode:void 0!==r.explode&&r.explode})}}Object.defineProperty(t,"__esModule",{value:!0});var s=r(0),l=n(s),c=r(1),f=n(c),p=r(59),d=n(p);t.default={path:a,query:u,header:o,cookie:i};var h=["accept","authorization","content-type"];e.exports=t.default},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e){var t=arguments.length>1&&void 0!==arguments[1]?arguments[1]:{},r=t.escape,n=arguments[2];return"number"==typeof e&&(e=e.toString()),"string"==typeof e&&e.length&&r?n?JSON.parse(e):(0,v.stringToCharArray)(e).map(function(e){return m(e)?e:y(e)&&"unsafe"===r?e:((0,h.default)(e)||[]).map(function(e){return("0"+e.toString(16).toUpperCase()).slice(-2)}).map(function(e){return"%"+e}).join("")}).join(""):e}function u(e){var t=e.key,r=e.value,n=e.style,u=e.explode,o=e.escape,i=function(e){return a(e,{escape:o})};if("simple"===n)return r.map(function(e){return i(e)}).join(",");if("label"===n)return"."+r.map(function(e){return i(e)}).join(".");if("matrix"===n)return r.map(function(e){return i(e)}).reduce(function(e,r){return!e||u?(e||"")+";"+t+"="+r:e+","+r},"");if("form"===n){var s=u?"&"+t+"=":",";return r.map(function(e){return i(e)}).join(s)}if("spaceDelimited"===n){var l=u?t+"=":"";return r.map(function(e){return i(e)}).join(" "+l)}if("pipeDelimited"===n){var c=u?t+"=":"";return r.map(function(e){return i(e)}).join("|"+c)}}function o(e){var t=e.key,r=e.value,n=e.style,u=e.explode,o=e.escape,i=function(e){return a(e,{escape:o})},s=(0,l.default)(r);return"simple"===n?s.reduce(function(e,t){var n=i(r[t]),a=u?"=":",";return(e?e+",":"")+t+a+n},""):"label"===n?s.reduce(function(e,t){var n=i(r[t]),a=u?"=":".";return(e?e+".":".")+t+a+n},""):"matrix"===n&&u?s.reduce(function(e,t){var n=i(r[t]);return(e?e+";":";")+t+"="+n},""):"matrix"===n?s.reduce(function(e,n){var a=i(r[n]);return(e?e+",":";"+t+"=")+n+","+a},""):"form"===n?s.reduce(function(e,t){var n=i(r[t]);return(e?e+(u?"&":","):"")+t+(u?"=":",")+n},""):void 0}function i(e){var t=e.key,r=e.value,n=e.style,u=e.escape,o=function(e){return a(e,{escape:u})};return"simple"===n?o(r):"label"===n?"."+o(r):"matrix"===n?";"+t+"="+o(r):"form"===n?o(r):"deepObject"===n?o(r):void 0}Object.defineProperty(t,"__esModule",{value:!0});var s=r(0),l=n(s),c=r(1),f=n(c);t.encodeDisallowedCharacters=a,t.default=function(e){var t=e.value;return Array.isArray(t)?u(e):"object"===(void 0===t?"undefined":(0,f.default)(t))?o(e):i(e)};var p=r(60),d=(n(p),r(61)),h=n(d),v=r(62),y=function(e){return":/?#[]@!$&'()*+,;=".indexOf(e)>-1},m=function(e){return/^[a-z0-9\-._~]+$/i.test(e)}},function(e,t){e.exports=require("encode-3986")},function(e,t){e.exports=require("utf8-bytes")},function(e,t){e.exports=require("utfstring")},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e){var t=e.request,r=e.securities,n=void 0===r?{}:r,a=e.operation,u=void 0===a?{}:a,o=e.spec,i=(0,p.default)({},t),s=n.authorized,l=void 0===s?{}:s,f=u.security||o.security||[],d=l&&!!(0,c.default)(l).length,v=(0,h.default)(o,["components","securitySchemes"])||{};return i.headers=i.headers||{},i.query=i.query||{},(0,c.default)(n).length&&d&&f&&(!Array.isArray(u.security)||u.security.length)?(f.forEach(function(e,t){for(var r in e){var n=l[r],a=v[r];if(n){var u=n.value||n,o=a.type;if(n)if("apiKey"===o)"query"===a.in&&(i.query[a.name]=u),"header"===a.in&&(i.headers[a.name]=u),"cookie"===a.in&&(i.cookies[a.name]=u);else if("http"===o){if("basic"===a.scheme){var s=u.username,c=u.password,f=(0,y.default)(s+":"+c);i.headers.Authorization="Basic "+f}"bearer"===a.scheme&&(i.headers.Authorization="Bearer "+u)}else if("oauth2"===o){var p=n.token||{},d=p.access_token,h=p.token_type;h&&"bearer"!==h.toLowerCase()||(h="Bearer"),i.headers.Authorization=h+" "+d}}}}),i):t}Object.defineProperty(t,"__esModule",{value:!0});var u=r(9),o=n(u),i=r(1),s=n(i),l=r(0),c=n(l);t.default=function(e,t){var r=e.operation,n=e.requestBody,u=e.securities,i=e.spec,l=e.attachContentTypeForEmptyPayload,f=e.requestContentType;t=a({request:t,securities:u,operation:r,spec:i});var p=r.requestBody||{},d=(0,c.default)(p.content||{}),h=f&&d.indexOf(f)>-1;if(n||l){if(f&&h)t.headers["Content-Type"]=f;else if(!f){var v=d[0];v&&(t.headers["Content-Type"]=v,f=v)}}else f&&h&&(t.headers["Content-Type"]=f);return n&&(f?d.indexOf(f)>-1&&("application/x-www-form-urlencoded"===f||0===f.indexOf("multipart/")?"object"===(void 0===n?"undefined":(0,s.default)(n))?(t.form={},(0,c.default)(n).forEach(function(e){var r=n[e],a=void 0,u=void 0;"undefined"!=typeof File&&(u=r instanceof File),"undefined"!=typeof Blob&&(u=u||r instanceof Blob),void 0!==m.Buffer&&(u=u||m.Buffer.isBuffer(r)),a="object"!==(void 0===r?"undefined":(0,s.default)(r))||u?r:Array.isArray(r)?r.toString():(0,o.default)(r),t.form[e]={value:a}})):t.form=n:t.body=n):t.body=n),t},t.applySecurities=a;var f=r(6),p=n(f),d=r(13),h=n(d),v=r(14),y=n(v),m=r(64)},function(e,t){e.exports=require("buffer/")},function(e,t,r){"use strict";function n(e){return e&&e.__esModule?e:{default:e}}function a(e){var t=e.request,r=e.securities,n=void 0===r?{}:r,a=e.operation,u=void 0===a?{}:a,i=e.spec,l=(0,c.default)({},t),f=n.authorized,p=void 0===f?{}:f,d=n.specSecurity,h=void 0===d?[]:d,v=u.security||h,y=p&&!!(0,o.default)(p).length,m=i.securityDefinitions;return l.headers=l.headers||{},l.query=l.query||{},(0,o.default)(n).length&&y&&v&&(!Array.isArray(u.security)||u.security.length)?(v.forEach(function(e,t){for(var r in e){var n=p[r];if(n){var a=n.token,u=n.value||n,o=m[r],i=o.type,c=o["x-tokenName"]||"access_token",f=a&&a[c],d=a&&a.token_type;if(n)if("apiKey"===i){var h="query"===o.in?"query":"headers";l[h]=l[h]||{},l[h][o.name]=u}else"basic"===i?u.header?l.headers.authorization=u.header:(u.base64=(0,s.default)(u.username+":"+u.password),l.headers.authorization="Basic "+u.base64):"oauth2"===i&&f&&(d=d&&"bearer"!==d.toLowerCase()?d:"Bearer",l.headers.authorization=d+" "+f)}}}),l):t}Object.defineProperty(t,"__esModule",{value:!0});var u=r(0),o=n(u);t.default=function(e,t){var r=e.spec,n=e.operation,u=e.securities,o=e.requestContentType,i=e.attachContentTypeForEmptyPayload;if(t=a({request:t,securities:u,operation:n,spec:r}),t.body||t.form||i)o?t.headers["Content-Type"]=o:Array.isArray(n.consumes)?t.headers["Content-Type"]=n.consumes[0]:Array.isArray(r.consumes)?t.headers["Content-Type"]=r.consumes[0]:n.parameters&&n.parameters.filter(function(e){return"file"===e.type}).length?t.headers["Content-Type"]="multipart/form-data":n.parameters&&n.parameters.filter(function(e){return"formData"===e.in}).length&&(t.headers["Content-Type"]="application/x-www-form-urlencoded");else if(o){var s=n.parameters&&n.parameters.filter(function(e){return"body"===e.in}).length>0,l=n.parameters&&n.parameters.filter(function(e){return"formData"===e.in}).length>0;(s||l)&&(t.headers["Content-Type"]=o)}return t},t.applySecurities=a;var i=r(14),s=n(i),l=r(6),c=n(l),f=r(8);n(f)}]);
 //# sourceMappingURL=index.js.map
-},{"babel-runtime/core-js/object/keys":"zX9P","babel-runtime/helpers/typeof":"WxTP","babel-runtime/core-js/object/assign":"Bx2q","babel-runtime/helpers/extends":"AGn3","babel-runtime/regenerator":"dOW8","lodash/assign":"ZP50","url":"Jb61","babel-runtime/core-js/json/stringify":"hoiv","babel-runtime/helpers/asyncToGenerator":"xi4I","babel-runtime/helpers/toConsumableArray":"ZRhR","lodash/get":"vzeB","btoa":"smZX","lodash/startsWith":"REiC","babel-runtime/helpers/slicedToArray":"+vUa","@kyleshockey/js-yaml":"/IzF","babel-runtime/core-js/promise":"tjUZ","babel-runtime/core-js/get-iterator":"fHwj","babel-runtime/helpers/classCallCheck":"rkdX","babel-runtime/helpers/createClass":"afBD","lodash/cloneDeep":"Ok6+","cross-fetch/polyfill":"57C1","qs":"3iGV","lodash/isString":"xVv5","isomorphic-form-data":"v5cQ","babel-runtime/core-js/object/create":"/GvW","lodash/find":"qi8U","babel-runtime/helpers/defineProperty":"AbJS","fast-json-patch":"l/+o","deep-extend":"QhIo","@kyleshockey/object-assign-deep":"TCfn","babel-runtime/core-js/weak-map":"3WDq","cross-fetch":"6C7H","querystring-browser":"+LPv","traverse":"yy4f","lodash/isObject":"xwKO","lodash/pick":"qE99","babel-runtime/helpers/objectWithoutProperties":"LUji","lodash/isPlainObject":"EUXB","lodash/isArray":"zOp4","cookie":"UbXA","encode-3986":"FzwG","utf8-bytes":"1I/s","utfstring":"dVuY","buffer/":"zfIw"}],"TC0N":[function(require,module,exports) {
+},{"babel-runtime/core-js/object/keys":"zX9P","babel-runtime/helpers/typeof":"WxTP","babel-runtime/core-js/object/assign":"Bx2q","babel-runtime/helpers/extends":"AGn3","babel-runtime/regenerator":"dOW8","lodash/assign":"ZP50","url":"Jb61","babel-runtime/core-js/json/stringify":"hoiv","babel-runtime/helpers/asyncToGenerator":"xi4I","babel-runtime/helpers/toConsumableArray":"ZRhR","lodash/get":"vzeB","btoa":"smZX","lodash/startsWith":"REiC","babel-runtime/helpers/slicedToArray":"+vUa","@kyleshockey/js-yaml":"/IzF","babel-runtime/core-js/promise":"tjUZ","babel-runtime/core-js/get-iterator":"fHwj","babel-runtime/helpers/classCallCheck":"rkdX","babel-runtime/helpers/createClass":"afBD","lodash/cloneDeep":"Ok6+","cross-fetch/polyfill":"57C1","qs":"3iGV","lodash/isString":"xVv5","isomorphic-form-data":"v5cQ","babel-runtime/core-js/object/create":"/GvW","lodash/find":"qi8U","babel-runtime/helpers/defineProperty":"AbJS","fast-json-patch":"l/+o","deep-extend":"QhIo","@kyleshockey/object-assign-deep":"TCfn","babel-runtime/core-js/weak-map":"3WDq","cross-fetch":"6C7H","querystring-browser":"+LPv","traverse":"yy4f","lodash/isObject":"xwKO","lodash/pick":"qE99","babel-runtime/helpers/objectWithoutProperties":"LUji","lodash/isPlainObject":"EUXB","lodash/isArray":"zOp4","cookie":"UbXA","encode-3986":"FzwG","utf8-bytes":"1I/s","utfstring":"dVuY","buffer/":"zfIw"}],"oy1V":[function(require,module,exports) {
 module.exports = {
   "definitions": {
     "GeoJsonFeature": {
@@ -82806,7 +84827,7 @@ module.exports = {
   },
   "swagger": "2.0"
 };
-},{}],"0zjt":[function(require,module,exports) {
+},{}],"Z3Lv":[function(require,module,exports) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -82822,7 +84843,7 @@ var _Vector = _interopRequireDefault(require("ol/source/Vector"));
 
 var _swaggerClient = _interopRequireDefault(require("swagger-client"));
 
-var _taskmgr_spec_slim = _interopRequireDefault(require("./taskmgr_spec_slim"));
+var _taskmgr_spec_slim = _interopRequireDefault(require("../../../_data/taskmgr_spec_slim"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -82834,7 +84855,6 @@ var ol_source_taskMgr = function ol_source_taskMgr(opts) {
   this.api = (0, _swaggerClient.default)({
     spec: _taskmgr_spec_slim.default
   }).client;
-  window.swag = this.api;
 
   _Vector.default.call(this, opts);
 };
@@ -82909,1986 +84929,16 @@ ol_source_taskMgr.prototype._project_to_feature = function (p) {
 
 var _default = ol_source_taskMgr;
 exports.default = _default;
-},{"ol":"LDxD","ol/format/GeoJSON":"Xkfr","ol/source/Vector":"s9D1","swagger-client":"NEID","./taskmgr_spec_slim":"TC0N"}],"XzS7":[function(require,module,exports) {
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.calculateSourceResolution = calculateSourceResolution;
-exports.render = render;
-
-var _dom = require("./dom.js");
-
-var _extent = require("./extent.js");
-
-var _math = require("./math.js");
-
-var _proj = require("./proj.js");
-
-/**
- * @module ol/reproj
- */
-
-/**
- * Calculates ideal resolution to use from the source in order to achieve
- * pixel mapping as close as possible to 1:1 during reprojection.
- * The resolution is calculated regardless of what resolutions
- * are actually available in the dataset (TileGrid, Image, ...).
- *
- * @param {import("./proj/Projection.js").default} sourceProj Source projection.
- * @param {import("./proj/Projection.js").default} targetProj Target projection.
- * @param {import("./coordinate.js").Coordinate} targetCenter Target center.
- * @param {number} targetResolution Target resolution.
- * @return {number} The best resolution to use. Can be +-Infinity, NaN or 0.
- */
-function calculateSourceResolution(sourceProj, targetProj, targetCenter, targetResolution) {
-  var sourceCenter = (0, _proj.transform)(targetCenter, targetProj, sourceProj); // calculate the ideal resolution of the source data
-
-  var sourceResolution = (0, _proj.getPointResolution)(targetProj, targetResolution, targetCenter);
-  var targetMetersPerUnit = targetProj.getMetersPerUnit();
-
-  if (targetMetersPerUnit !== undefined) {
-    sourceResolution *= targetMetersPerUnit;
-  }
-
-  var sourceMetersPerUnit = sourceProj.getMetersPerUnit();
-
-  if (sourceMetersPerUnit !== undefined) {
-    sourceResolution /= sourceMetersPerUnit;
-  } // Based on the projection properties, the point resolution at the specified
-  // coordinates may be slightly different. We need to reverse-compensate this
-  // in order to achieve optimal results.
-
-
-  var sourceExtent = sourceProj.getExtent();
-
-  if (!sourceExtent || (0, _extent.containsCoordinate)(sourceExtent, sourceCenter)) {
-    var compensationFactor = (0, _proj.getPointResolution)(sourceProj, sourceResolution, sourceCenter) / sourceResolution;
-
-    if (isFinite(compensationFactor) && compensationFactor > 0) {
-      sourceResolution /= compensationFactor;
-    }
-  }
-
-  return sourceResolution;
-}
-/**
- * Enlarge the clipping triangle point by 1 pixel to ensure the edges overlap
- * in order to mask gaps caused by antialiasing.
- *
- * @param {number} centroidX Centroid of the triangle (x coordinate in pixels).
- * @param {number} centroidY Centroid of the triangle (y coordinate in pixels).
- * @param {number} x X coordinate of the point (in pixels).
- * @param {number} y Y coordinate of the point (in pixels).
- * @return {import("./coordinate.js").Coordinate} New point 1 px farther from the centroid.
- */
-
-
-function enlargeClipPoint(centroidX, centroidY, x, y) {
-  var dX = x - centroidX;
-  var dY = y - centroidY;
-  var distance = Math.sqrt(dX * dX + dY * dY);
-  return [Math.round(x + dX / distance), Math.round(y + dY / distance)];
-}
-/**
- * Renders the source data into new canvas based on the triangulation.
- *
- * @param {number} width Width of the canvas.
- * @param {number} height Height of the canvas.
- * @param {number} pixelRatio Pixel ratio.
- * @param {number} sourceResolution Source resolution.
- * @param {import("./extent.js").Extent} sourceExtent Extent of the data source.
- * @param {number} targetResolution Target resolution.
- * @param {import("./extent.js").Extent} targetExtent Target extent.
- * @param {import("./reproj/Triangulation.js").default} triangulation
- * Calculated triangulation.
- * @param {Array<{extent: import("./extent.js").Extent,
- *                 image: (HTMLCanvasElement|HTMLImageElement|HTMLVideoElement)}>} sources
- * Array of sources.
- * @param {number} gutter Gutter of the sources.
- * @param {boolean=} opt_renderEdges Render reprojection edges.
- * @return {HTMLCanvasElement} Canvas with reprojected data.
- */
-
-
-function render(width, height, pixelRatio, sourceResolution, sourceExtent, targetResolution, targetExtent, triangulation, sources, gutter, opt_renderEdges) {
-  var context = (0, _dom.createCanvasContext2D)(Math.round(pixelRatio * width), Math.round(pixelRatio * height));
-
-  if (sources.length === 0) {
-    return context.canvas;
-  }
-
-  context.scale(pixelRatio, pixelRatio);
-  var sourceDataExtent = (0, _extent.createEmpty)();
-  sources.forEach(function (src, i, arr) {
-    (0, _extent.extend)(sourceDataExtent, src.extent);
-  });
-  var canvasWidthInUnits = (0, _extent.getWidth)(sourceDataExtent);
-  var canvasHeightInUnits = (0, _extent.getHeight)(sourceDataExtent);
-  var stitchContext = (0, _dom.createCanvasContext2D)(Math.round(pixelRatio * canvasWidthInUnits / sourceResolution), Math.round(pixelRatio * canvasHeightInUnits / sourceResolution));
-  var stitchScale = pixelRatio / sourceResolution;
-  sources.forEach(function (src, i, arr) {
-    var xPos = src.extent[0] - sourceDataExtent[0];
-    var yPos = -(src.extent[3] - sourceDataExtent[3]);
-    var srcWidth = (0, _extent.getWidth)(src.extent);
-    var srcHeight = (0, _extent.getHeight)(src.extent);
-    stitchContext.drawImage(src.image, gutter, gutter, src.image.width - 2 * gutter, src.image.height - 2 * gutter, xPos * stitchScale, yPos * stitchScale, srcWidth * stitchScale, srcHeight * stitchScale);
-  });
-  var targetTopLeft = (0, _extent.getTopLeft)(targetExtent);
-  triangulation.getTriangles().forEach(function (triangle, i, arr) {
-    /* Calculate affine transform (src -> dst)
-     * Resulting matrix can be used to transform coordinate
-     * from `sourceProjection` to destination pixels.
-     *
-     * To optimize number of context calls and increase numerical stability,
-     * we also do the following operations:
-     * trans(-topLeftExtentCorner), scale(1 / targetResolution), scale(1, -1)
-     * here before solving the linear system so [ui, vi] are pixel coordinates.
-     *
-     * Src points: xi, yi
-     * Dst points: ui, vi
-     * Affine coefficients: aij
-     *
-     * | x0 y0 1  0  0 0 |   |a00|   |u0|
-     * | x1 y1 1  0  0 0 |   |a01|   |u1|
-     * | x2 y2 1  0  0 0 | x |a02| = |u2|
-     * |  0  0 0 x0 y0 1 |   |a10|   |v0|
-     * |  0  0 0 x1 y1 1 |   |a11|   |v1|
-     * |  0  0 0 x2 y2 1 |   |a12|   |v2|
-     */
-    var source = triangle.source;
-    var target = triangle.target;
-    var x0 = source[0][0],
-        y0 = source[0][1];
-    var x1 = source[1][0],
-        y1 = source[1][1];
-    var x2 = source[2][0],
-        y2 = source[2][1];
-    var u0 = (target[0][0] - targetTopLeft[0]) / targetResolution;
-    var v0 = -(target[0][1] - targetTopLeft[1]) / targetResolution;
-    var u1 = (target[1][0] - targetTopLeft[0]) / targetResolution;
-    var v1 = -(target[1][1] - targetTopLeft[1]) / targetResolution;
-    var u2 = (target[2][0] - targetTopLeft[0]) / targetResolution;
-    var v2 = -(target[2][1] - targetTopLeft[1]) / targetResolution; // Shift all the source points to improve numerical stability
-    // of all the subsequent calculations. The [x0, y0] is used here.
-    // This is also used to simplify the linear system.
-
-    var sourceNumericalShiftX = x0;
-    var sourceNumericalShiftY = y0;
-    x0 = 0;
-    y0 = 0;
-    x1 -= sourceNumericalShiftX;
-    y1 -= sourceNumericalShiftY;
-    x2 -= sourceNumericalShiftX;
-    y2 -= sourceNumericalShiftY;
-    var augmentedMatrix = [[x1, y1, 0, 0, u1 - u0], [x2, y2, 0, 0, u2 - u0], [0, 0, x1, y1, v1 - v0], [0, 0, x2, y2, v2 - v0]];
-    var affineCoefs = (0, _math.solveLinearSystem)(augmentedMatrix);
-
-    if (!affineCoefs) {
-      return;
-    }
-
-    context.save();
-    context.beginPath();
-    var centroidX = (u0 + u1 + u2) / 3;
-    var centroidY = (v0 + v1 + v2) / 3;
-    var p0 = enlargeClipPoint(centroidX, centroidY, u0, v0);
-    var p1 = enlargeClipPoint(centroidX, centroidY, u1, v1);
-    var p2 = enlargeClipPoint(centroidX, centroidY, u2, v2);
-    context.moveTo(p1[0], p1[1]);
-    context.lineTo(p0[0], p0[1]);
-    context.lineTo(p2[0], p2[1]);
-    context.clip();
-    context.transform(affineCoefs[0], affineCoefs[2], affineCoefs[1], affineCoefs[3], u0, v0);
-    context.translate(sourceDataExtent[0] - sourceNumericalShiftX, sourceDataExtent[3] - sourceNumericalShiftY);
-    context.scale(sourceResolution / pixelRatio, -sourceResolution / pixelRatio);
-    context.drawImage(stitchContext.canvas, 0, 0);
-    context.restore();
-  });
-
-  if (opt_renderEdges) {
-    context.save();
-    context.strokeStyle = 'black';
-    context.lineWidth = 1;
-    triangulation.getTriangles().forEach(function (triangle, i, arr) {
-      var target = triangle.target;
-      var u0 = (target[0][0] - targetTopLeft[0]) / targetResolution;
-      var v0 = -(target[0][1] - targetTopLeft[1]) / targetResolution;
-      var u1 = (target[1][0] - targetTopLeft[0]) / targetResolution;
-      var v1 = -(target[1][1] - targetTopLeft[1]) / targetResolution;
-      var u2 = (target[2][0] - targetTopLeft[0]) / targetResolution;
-      var v2 = -(target[2][1] - targetTopLeft[1]) / targetResolution;
-      context.beginPath();
-      context.moveTo(u1, v1);
-      context.lineTo(u0, v0);
-      context.lineTo(u2, v2);
-      context.closePath();
-      context.stroke();
-    });
-    context.restore();
-  }
-
-  return context.canvas;
-} //# sourceMappingURL=reproj.js.map
-},{"./dom.js":"N5LR","./extent.js":"pbFF","./math.js":"cgU2","./proj.js":"bkYg"}],"nSx6":[function(require,module,exports) {
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.default = void 0;
-
-var _extent = require("../extent.js");
-
-var _math = require("../math.js");
-
-var _proj = require("../proj.js");
-
-/**
- * @module ol/reproj/Triangulation
- */
-
-/**
- * Single triangle; consists of 3 source points and 3 target points.
- * @typedef {Object} Triangle
- * @property {Array<import("../coordinate.js").Coordinate>} source
- * @property {Array<import("../coordinate.js").Coordinate>} target
- */
-
-/**
- * Maximum number of subdivision steps during raster reprojection triangulation.
- * Prevents high memory usage and large number of proj4 calls (for certain
- * transformations and areas). At most `2*(2^this)` triangles are created for
- * each triangulated extent (tile/image).
- * @type {number}
- */
-var MAX_SUBDIVISION = 10;
-/**
- * Maximum allowed size of triangle relative to world width. When transforming
- * corners of world extent between certain projections, the resulting
- * triangulation seems to have zero error and no subdivision is performed. If
- * the triangle width is more than this (relative to world width; 0-1),
- * subdivison is forced (up to `MAX_SUBDIVISION`). Default is `0.25`.
- * @type {number}
- */
-
-var MAX_TRIANGLE_WIDTH = 0.25;
-/**
- * @classdesc
- * Class containing triangulation of the given target extent.
- * Used for determining source data and the reprojection itself.
- */
-
-var Triangulation = function Triangulation(sourceProj, targetProj, targetExtent, maxSourceExtent, errorThreshold) {
-  /**
-   * @type {import("../proj/Projection.js").default}
-   * @private
-   */
-  this.sourceProj_ = sourceProj;
-  /**
-   * @type {import("../proj/Projection.js").default}
-   * @private
-   */
-
-  this.targetProj_ = targetProj;
-  /** @type {!Object<string, import("../coordinate.js").Coordinate>} */
-
-  var transformInvCache = {};
-  var transformInv = (0, _proj.getTransform)(this.targetProj_, this.sourceProj_);
-  /**
-   * @param {import("../coordinate.js").Coordinate} c A coordinate.
-   * @return {import("../coordinate.js").Coordinate} Transformed coordinate.
-   * @private
-   */
-
-  this.transformInv_ = function (c) {
-    var key = c[0] + '/' + c[1];
-
-    if (!transformInvCache[key]) {
-      transformInvCache[key] = transformInv(c);
-    }
-
-    return transformInvCache[key];
-  };
-  /**
-   * @type {import("../extent.js").Extent}
-   * @private
-   */
-
-
-  this.maxSourceExtent_ = maxSourceExtent;
-  /**
-   * @type {number}
-   * @private
-   */
-
-  this.errorThresholdSquared_ = errorThreshold * errorThreshold;
-  /**
-   * @type {Array<Triangle>}
-   * @private
-   */
-
-  this.triangles_ = [];
-  /**
-   * Indicates that the triangulation crosses edge of the source projection.
-   * @type {boolean}
-   * @private
-   */
-
-  this.wrapsXInSource_ = false;
-  /**
-   * @type {boolean}
-   * @private
-   */
-
-  this.canWrapXInSource_ = this.sourceProj_.canWrapX() && !!maxSourceExtent && !!this.sourceProj_.getExtent() && (0, _extent.getWidth)(maxSourceExtent) == (0, _extent.getWidth)(this.sourceProj_.getExtent());
-  /**
-   * @type {?number}
-   * @private
-   */
-
-  this.sourceWorldWidth_ = this.sourceProj_.getExtent() ? (0, _extent.getWidth)(this.sourceProj_.getExtent()) : null;
-  /**
-   * @type {?number}
-   * @private
-   */
-
-  this.targetWorldWidth_ = this.targetProj_.getExtent() ? (0, _extent.getWidth)(this.targetProj_.getExtent()) : null;
-  var destinationTopLeft = (0, _extent.getTopLeft)(targetExtent);
-  var destinationTopRight = (0, _extent.getTopRight)(targetExtent);
-  var destinationBottomRight = (0, _extent.getBottomRight)(targetExtent);
-  var destinationBottomLeft = (0, _extent.getBottomLeft)(targetExtent);
-  var sourceTopLeft = this.transformInv_(destinationTopLeft);
-  var sourceTopRight = this.transformInv_(destinationTopRight);
-  var sourceBottomRight = this.transformInv_(destinationBottomRight);
-  var sourceBottomLeft = this.transformInv_(destinationBottomLeft);
-  this.addQuad_(destinationTopLeft, destinationTopRight, destinationBottomRight, destinationBottomLeft, sourceTopLeft, sourceTopRight, sourceBottomRight, sourceBottomLeft, MAX_SUBDIVISION);
-
-  if (this.wrapsXInSource_) {
-    var leftBound = Infinity;
-    this.triangles_.forEach(function (triangle, i, arr) {
-      leftBound = Math.min(leftBound, triangle.source[0][0], triangle.source[1][0], triangle.source[2][0]);
-    }); // Shift triangles to be as close to `leftBound` as possible
-    // (if the distance is more than `worldWidth / 2` it can be closer.
-
-    this.triangles_.forEach(function (triangle) {
-      if (Math.max(triangle.source[0][0], triangle.source[1][0], triangle.source[2][0]) - leftBound > this.sourceWorldWidth_ / 2) {
-        var newTriangle = [[triangle.source[0][0], triangle.source[0][1]], [triangle.source[1][0], triangle.source[1][1]], [triangle.source[2][0], triangle.source[2][1]]];
-
-        if (newTriangle[0][0] - leftBound > this.sourceWorldWidth_ / 2) {
-          newTriangle[0][0] -= this.sourceWorldWidth_;
-        }
-
-        if (newTriangle[1][0] - leftBound > this.sourceWorldWidth_ / 2) {
-          newTriangle[1][0] -= this.sourceWorldWidth_;
-        }
-
-        if (newTriangle[2][0] - leftBound > this.sourceWorldWidth_ / 2) {
-          newTriangle[2][0] -= this.sourceWorldWidth_;
-        } // Rarely (if the extent contains both the dateline and prime meridian)
-        // the shift can in turn break some triangles.
-        // Detect this here and don't shift in such cases.
-
-
-        var minX = Math.min(newTriangle[0][0], newTriangle[1][0], newTriangle[2][0]);
-        var maxX = Math.max(newTriangle[0][0], newTriangle[1][0], newTriangle[2][0]);
-
-        if (maxX - minX < this.sourceWorldWidth_ / 2) {
-          triangle.source = newTriangle;
-        }
-      }
-    }.bind(this));
-  }
-
-  transformInvCache = {};
-};
-/**
- * Adds triangle to the triangulation.
- * @param {import("../coordinate.js").Coordinate} a The target a coordinate.
- * @param {import("../coordinate.js").Coordinate} b The target b coordinate.
- * @param {import("../coordinate.js").Coordinate} c The target c coordinate.
- * @param {import("../coordinate.js").Coordinate} aSrc The source a coordinate.
- * @param {import("../coordinate.js").Coordinate} bSrc The source b coordinate.
- * @param {import("../coordinate.js").Coordinate} cSrc The source c coordinate.
- * @private
- */
-
-
-Triangulation.prototype.addTriangle_ = function addTriangle_(a, b, c, aSrc, bSrc, cSrc) {
-  this.triangles_.push({
-    source: [aSrc, bSrc, cSrc],
-    target: [a, b, c]
-  });
-};
-/**
- * Adds quad (points in clock-wise order) to the triangulation
- * (and reprojects the vertices) if valid.
- * Performs quad subdivision if needed to increase precision.
- *
- * @param {import("../coordinate.js").Coordinate} a The target a coordinate.
- * @param {import("../coordinate.js").Coordinate} b The target b coordinate.
- * @param {import("../coordinate.js").Coordinate} c The target c coordinate.
- * @param {import("../coordinate.js").Coordinate} d The target d coordinate.
- * @param {import("../coordinate.js").Coordinate} aSrc The source a coordinate.
- * @param {import("../coordinate.js").Coordinate} bSrc The source b coordinate.
- * @param {import("../coordinate.js").Coordinate} cSrc The source c coordinate.
- * @param {import("../coordinate.js").Coordinate} dSrc The source d coordinate.
- * @param {number} maxSubdivision Maximal allowed subdivision of the quad.
- * @private
- */
-
-
-Triangulation.prototype.addQuad_ = function addQuad_(a, b, c, d, aSrc, bSrc, cSrc, dSrc, maxSubdivision) {
-  var sourceQuadExtent = (0, _extent.boundingExtent)([aSrc, bSrc, cSrc, dSrc]);
-  var sourceCoverageX = this.sourceWorldWidth_ ? (0, _extent.getWidth)(sourceQuadExtent) / this.sourceWorldWidth_ : null;
-  var sourceWorldWidth =
-  /** @type {number} */
-  this.sourceWorldWidth_; // when the quad is wrapped in the source projection
-  // it covers most of the projection extent, but not fully
-
-  var wrapsX = this.sourceProj_.canWrapX() && sourceCoverageX > 0.5 && sourceCoverageX < 1;
-  var needsSubdivision = false;
-
-  if (maxSubdivision > 0) {
-    if (this.targetProj_.isGlobal() && this.targetWorldWidth_) {
-      var targetQuadExtent = (0, _extent.boundingExtent)([a, b, c, d]);
-      var targetCoverageX = (0, _extent.getWidth)(targetQuadExtent) / this.targetWorldWidth_;
-      needsSubdivision = targetCoverageX > MAX_TRIANGLE_WIDTH || needsSubdivision;
-    }
-
-    if (!wrapsX && this.sourceProj_.isGlobal() && sourceCoverageX) {
-      needsSubdivision = sourceCoverageX > MAX_TRIANGLE_WIDTH || needsSubdivision;
-    }
-  }
-
-  if (!needsSubdivision && this.maxSourceExtent_) {
-    if (!(0, _extent.intersects)(sourceQuadExtent, this.maxSourceExtent_)) {
-      // whole quad outside source projection extent -> ignore
-      return;
-    }
-  }
-
-  if (!needsSubdivision) {
-    if (!isFinite(aSrc[0]) || !isFinite(aSrc[1]) || !isFinite(bSrc[0]) || !isFinite(bSrc[1]) || !isFinite(cSrc[0]) || !isFinite(cSrc[1]) || !isFinite(dSrc[0]) || !isFinite(dSrc[1])) {
-      if (maxSubdivision > 0) {
-        needsSubdivision = true;
-      } else {
-        return;
-      }
-    }
-  }
-
-  if (maxSubdivision > 0) {
-    if (!needsSubdivision) {
-      var center = [(a[0] + c[0]) / 2, (a[1] + c[1]) / 2];
-      var centerSrc = this.transformInv_(center);
-      var dx;
-
-      if (wrapsX) {
-        var centerSrcEstimX = ((0, _math.modulo)(aSrc[0], sourceWorldWidth) + (0, _math.modulo)(cSrc[0], sourceWorldWidth)) / 2;
-        dx = centerSrcEstimX - (0, _math.modulo)(centerSrc[0], sourceWorldWidth);
-      } else {
-        dx = (aSrc[0] + cSrc[0]) / 2 - centerSrc[0];
-      }
-
-      var dy = (aSrc[1] + cSrc[1]) / 2 - centerSrc[1];
-      var centerSrcErrorSquared = dx * dx + dy * dy;
-      needsSubdivision = centerSrcErrorSquared > this.errorThresholdSquared_;
-    }
-
-    if (needsSubdivision) {
-      if (Math.abs(a[0] - c[0]) <= Math.abs(a[1] - c[1])) {
-        // split horizontally (top & bottom)
-        var bc = [(b[0] + c[0]) / 2, (b[1] + c[1]) / 2];
-        var bcSrc = this.transformInv_(bc);
-        var da = [(d[0] + a[0]) / 2, (d[1] + a[1]) / 2];
-        var daSrc = this.transformInv_(da);
-        this.addQuad_(a, b, bc, da, aSrc, bSrc, bcSrc, daSrc, maxSubdivision - 1);
-        this.addQuad_(da, bc, c, d, daSrc, bcSrc, cSrc, dSrc, maxSubdivision - 1);
-      } else {
-        // split vertically (left & right)
-        var ab = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-        var abSrc = this.transformInv_(ab);
-        var cd = [(c[0] + d[0]) / 2, (c[1] + d[1]) / 2];
-        var cdSrc = this.transformInv_(cd);
-        this.addQuad_(a, ab, cd, d, aSrc, abSrc, cdSrc, dSrc, maxSubdivision - 1);
-        this.addQuad_(ab, b, c, cd, abSrc, bSrc, cSrc, cdSrc, maxSubdivision - 1);
-      }
-
-      return;
-    }
-  }
-
-  if (wrapsX) {
-    if (!this.canWrapXInSource_) {
-      return;
-    }
-
-    this.wrapsXInSource_ = true;
-  }
-
-  this.addTriangle_(a, c, d, aSrc, cSrc, dSrc);
-  this.addTriangle_(a, b, c, aSrc, bSrc, cSrc);
-};
-/**
- * Calculates extent of the 'source' coordinates from all the triangles.
- *
- * @return {import("../extent.js").Extent} Calculated extent.
- */
-
-
-Triangulation.prototype.calculateSourceExtent = function calculateSourceExtent() {
-  var extent = (0, _extent.createEmpty)();
-  this.triangles_.forEach(function (triangle, i, arr) {
-    var src = triangle.source;
-    (0, _extent.extendCoordinate)(extent, src[0]);
-    (0, _extent.extendCoordinate)(extent, src[1]);
-    (0, _extent.extendCoordinate)(extent, src[2]);
-  });
-  return extent;
-};
-/**
- * @return {Array<Triangle>} Array of the calculated triangles.
- */
-
-
-Triangulation.prototype.getTriangles = function getTriangles() {
-  return this.triangles_;
-};
-
-var _default = Triangulation; //# sourceMappingURL=Triangulation.js.map
-
-exports.default = _default;
-},{"../extent.js":"pbFF","../math.js":"cgU2","../proj.js":"bkYg"}],"PSAO":[function(require,module,exports) {
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.default = void 0;
-
-var _common = require("./common.js");
-
-var _Tile = _interopRequireDefault(require("../Tile.js"));
-
-var _TileState = _interopRequireDefault(require("../TileState.js"));
-
-var _events = require("../events.js");
-
-var _EventType = _interopRequireDefault(require("../events/EventType.js"));
-
-var _extent = require("../extent.js");
-
-var _math = require("../math.js");
-
-var _reproj = require("../reproj.js");
-
-var _Triangulation = _interopRequireDefault(require("./Triangulation.js"));
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/**
- * @module ol/reproj/Tile
- */
-
-/**
- * @typedef {function(number, number, number, number) : import("../Tile.js").default} FunctionType
- */
-
-/**
- * @classdesc
- * Class encapsulating single reprojected tile.
- * See {@link module:ol/source/TileImage~TileImage}.
- *
- */
-var ReprojTile =
-/*@__PURE__*/
-function (Tile) {
-  function ReprojTile(sourceProj, sourceTileGrid, targetProj, targetTileGrid, tileCoord, wrappedTileCoord, pixelRatio, gutter, getTileFunction, opt_errorThreshold, opt_renderEdges) {
-    Tile.call(this, tileCoord, _TileState.default.IDLE);
-    /**
-     * @private
-     * @type {boolean}
-     */
-
-    this.renderEdges_ = opt_renderEdges !== undefined ? opt_renderEdges : false;
-    /**
-     * @private
-     * @type {number}
-     */
-
-    this.pixelRatio_ = pixelRatio;
-    /**
-     * @private
-     * @type {number}
-     */
-
-    this.gutter_ = gutter;
-    /**
-     * @private
-     * @type {HTMLCanvasElement}
-     */
-
-    this.canvas_ = null;
-    /**
-     * @private
-     * @type {import("../tilegrid/TileGrid.js").default}
-     */
-
-    this.sourceTileGrid_ = sourceTileGrid;
-    /**
-     * @private
-     * @type {import("../tilegrid/TileGrid.js").default}
-     */
-
-    this.targetTileGrid_ = targetTileGrid;
-    /**
-     * @private
-     * @type {import("../tilecoord.js").TileCoord}
-     */
-
-    this.wrappedTileCoord_ = wrappedTileCoord ? wrappedTileCoord : tileCoord;
-    /**
-     * @private
-     * @type {!Array<import("../Tile.js").default>}
-     */
-
-    this.sourceTiles_ = [];
-    /**
-     * @private
-     * @type {Array<import("../events.js").EventsKey>}
-     */
-
-    this.sourcesListenerKeys_ = null;
-    /**
-     * @private
-     * @type {number}
-     */
-
-    this.sourceZ_ = 0;
-    var targetExtent = targetTileGrid.getTileCoordExtent(this.wrappedTileCoord_);
-    var maxTargetExtent = this.targetTileGrid_.getExtent();
-    var maxSourceExtent = this.sourceTileGrid_.getExtent();
-    var limitedTargetExtent = maxTargetExtent ? (0, _extent.getIntersection)(targetExtent, maxTargetExtent) : targetExtent;
-
-    if ((0, _extent.getArea)(limitedTargetExtent) === 0) {
-      // Tile is completely outside range -> EMPTY
-      // TODO: is it actually correct that the source even creates the tile ?
-      this.state = _TileState.default.EMPTY;
-      return;
-    }
-
-    var sourceProjExtent = sourceProj.getExtent();
-
-    if (sourceProjExtent) {
-      if (!maxSourceExtent) {
-        maxSourceExtent = sourceProjExtent;
-      } else {
-        maxSourceExtent = (0, _extent.getIntersection)(maxSourceExtent, sourceProjExtent);
-      }
-    }
-
-    var targetResolution = targetTileGrid.getResolution(this.wrappedTileCoord_[0]);
-    var targetCenter = (0, _extent.getCenter)(limitedTargetExtent);
-    var sourceResolution = (0, _reproj.calculateSourceResolution)(sourceProj, targetProj, targetCenter, targetResolution);
-
-    if (!isFinite(sourceResolution) || sourceResolution <= 0) {
-      // invalid sourceResolution -> EMPTY
-      // probably edges of the projections when no extent is defined
-      this.state = _TileState.default.EMPTY;
-      return;
-    }
-
-    var errorThresholdInPixels = opt_errorThreshold !== undefined ? opt_errorThreshold : _common.ERROR_THRESHOLD;
-    /**
-     * @private
-     * @type {!import("./Triangulation.js").default}
-     */
-
-    this.triangulation_ = new _Triangulation.default(sourceProj, targetProj, limitedTargetExtent, maxSourceExtent, sourceResolution * errorThresholdInPixels);
-
-    if (this.triangulation_.getTriangles().length === 0) {
-      // no valid triangles -> EMPTY
-      this.state = _TileState.default.EMPTY;
-      return;
-    }
-
-    this.sourceZ_ = sourceTileGrid.getZForResolution(sourceResolution);
-    var sourceExtent = this.triangulation_.calculateSourceExtent();
-
-    if (maxSourceExtent) {
-      if (sourceProj.canWrapX()) {
-        sourceExtent[1] = (0, _math.clamp)(sourceExtent[1], maxSourceExtent[1], maxSourceExtent[3]);
-        sourceExtent[3] = (0, _math.clamp)(sourceExtent[3], maxSourceExtent[1], maxSourceExtent[3]);
-      } else {
-        sourceExtent = (0, _extent.getIntersection)(sourceExtent, maxSourceExtent);
-      }
-    }
-
-    if (!(0, _extent.getArea)(sourceExtent)) {
-      this.state = _TileState.default.EMPTY;
-    } else {
-      var sourceRange = sourceTileGrid.getTileRangeForExtentAndZ(sourceExtent, this.sourceZ_);
-
-      for (var srcX = sourceRange.minX; srcX <= sourceRange.maxX; srcX++) {
-        for (var srcY = sourceRange.minY; srcY <= sourceRange.maxY; srcY++) {
-          var tile = getTileFunction(this.sourceZ_, srcX, srcY, pixelRatio);
-
-          if (tile) {
-            this.sourceTiles_.push(tile);
-          }
-        }
-      }
-
-      if (this.sourceTiles_.length === 0) {
-        this.state = _TileState.default.EMPTY;
-      }
-    }
-  }
-
-  if (Tile) ReprojTile.__proto__ = Tile;
-  ReprojTile.prototype = Object.create(Tile && Tile.prototype);
-  ReprojTile.prototype.constructor = ReprojTile;
-  /**
-   * @inheritDoc
-   */
-
-  ReprojTile.prototype.disposeInternal = function disposeInternal() {
-    if (this.state == _TileState.default.LOADING) {
-      this.unlistenSources_();
-    }
-
-    Tile.prototype.disposeInternal.call(this);
-  };
-  /**
-   * Get the HTML Canvas element for this tile.
-   * @return {HTMLCanvasElement} Canvas.
-   */
-
-
-  ReprojTile.prototype.getImage = function getImage() {
-    return this.canvas_;
-  };
-  /**
-   * @private
-   */
-
-
-  ReprojTile.prototype.reproject_ = function reproject_() {
-    var sources = [];
-    this.sourceTiles_.forEach(function (tile, i, arr) {
-      if (tile && tile.getState() == _TileState.default.LOADED) {
-        sources.push({
-          extent: this.sourceTileGrid_.getTileCoordExtent(tile.tileCoord),
-          image: tile.getImage()
-        });
-      }
-    }.bind(this));
-    this.sourceTiles_.length = 0;
-
-    if (sources.length === 0) {
-      this.state = _TileState.default.ERROR;
-    } else {
-      var z = this.wrappedTileCoord_[0];
-      var size = this.targetTileGrid_.getTileSize(z);
-      var width = typeof size === 'number' ? size : size[0];
-      var height = typeof size === 'number' ? size : size[1];
-      var targetResolution = this.targetTileGrid_.getResolution(z);
-      var sourceResolution = this.sourceTileGrid_.getResolution(this.sourceZ_);
-      var targetExtent = this.targetTileGrid_.getTileCoordExtent(this.wrappedTileCoord_);
-      this.canvas_ = (0, _reproj.render)(width, height, this.pixelRatio_, sourceResolution, this.sourceTileGrid_.getExtent(), targetResolution, targetExtent, this.triangulation_, sources, this.gutter_, this.renderEdges_);
-      this.state = _TileState.default.LOADED;
-    }
-
-    this.changed();
-  };
-  /**
-   * @inheritDoc
-   */
-
-
-  ReprojTile.prototype.load = function load() {
-    if (this.state == _TileState.default.IDLE) {
-      this.state = _TileState.default.LOADING;
-      this.changed();
-      var leftToLoad = 0;
-      this.sourcesListenerKeys_ = [];
-      this.sourceTiles_.forEach(function (tile, i, arr) {
-        var state = tile.getState();
-
-        if (state == _TileState.default.IDLE || state == _TileState.default.LOADING) {
-          leftToLoad++;
-          var sourceListenKey = (0, _events.listen)(tile, _EventType.default.CHANGE, function (e) {
-            var state = tile.getState();
-
-            if (state == _TileState.default.LOADED || state == _TileState.default.ERROR || state == _TileState.default.EMPTY) {
-              (0, _events.unlistenByKey)(sourceListenKey);
-              leftToLoad--;
-
-              if (leftToLoad === 0) {
-                this.unlistenSources_();
-                this.reproject_();
-              }
-            }
-          }, this);
-          this.sourcesListenerKeys_.push(sourceListenKey);
-        }
-      }.bind(this));
-      this.sourceTiles_.forEach(function (tile, i, arr) {
-        var state = tile.getState();
-
-        if (state == _TileState.default.IDLE) {
-          tile.load();
-        }
-      });
-
-      if (leftToLoad === 0) {
-        setTimeout(this.reproject_.bind(this), 0);
-      }
-    }
-  };
-  /**
-   * @private
-   */
-
-
-  ReprojTile.prototype.unlistenSources_ = function unlistenSources_() {
-    this.sourcesListenerKeys_.forEach(_events.unlistenByKey);
-    this.sourcesListenerKeys_ = null;
-  };
-
-  return ReprojTile;
-}(_Tile.default);
-
-var _default = ReprojTile; //# sourceMappingURL=Tile.js.map
-
-exports.default = _default;
-},{"./common.js":"s+12","../Tile.js":"lLEG","../TileState.js":"5TPV","../events.js":"E9xa","../events/EventType.js":"lUmy","../extent.js":"pbFF","../math.js":"cgU2","../reproj.js":"XzS7","./Triangulation.js":"nSx6"}],"WLnk":[function(require,module,exports) {
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.createFromTemplate = createFromTemplate;
-exports.createFromTemplates = createFromTemplates;
-exports.createFromTileUrlFunctions = createFromTileUrlFunctions;
-exports.nullTileUrlFunction = nullTileUrlFunction;
-exports.expandUrl = expandUrl;
-
-var _asserts = require("./asserts.js");
-
-var _math = require("./math.js");
-
-var _tilecoord = require("./tilecoord.js");
-
-/**
- * @module ol/tileurlfunction
- */
-
-/**
- * @param {string} template Template.
- * @param {import("./tilegrid/TileGrid.js").default} tileGrid Tile grid.
- * @return {import("./Tile.js").UrlFunction} Tile URL function.
- */
-function createFromTemplate(template, tileGrid) {
-  var zRegEx = /\{z\}/g;
-  var xRegEx = /\{x\}/g;
-  var yRegEx = /\{y\}/g;
-  var dashYRegEx = /\{-y\}/g;
-  return (
-    /**
-     * @param {import("./tilecoord.js").TileCoord} tileCoord Tile Coordinate.
-     * @param {number} pixelRatio Pixel ratio.
-     * @param {import("./proj/Projection.js").default} projection Projection.
-     * @return {string|undefined} Tile URL.
-     */
-    function (tileCoord, pixelRatio, projection) {
-      if (!tileCoord) {
-        return undefined;
-      } else {
-        return template.replace(zRegEx, tileCoord[0].toString()).replace(xRegEx, tileCoord[1].toString()).replace(yRegEx, function () {
-          var y = -tileCoord[2] - 1;
-          return y.toString();
-        }).replace(dashYRegEx, function () {
-          var z = tileCoord[0];
-          var range = tileGrid.getFullTileRange(z);
-          (0, _asserts.assert)(range, 55); // The {-y} placeholder requires a tile grid with extent
-
-          var y = range.getHeight() + tileCoord[2];
-          return y.toString();
-        });
-      }
-    }
-  );
-}
-/**
- * @param {Array<string>} templates Templates.
- * @param {import("./tilegrid/TileGrid.js").default} tileGrid Tile grid.
- * @return {import("./Tile.js").UrlFunction} Tile URL function.
- */
-
-
-function createFromTemplates(templates, tileGrid) {
-  var len = templates.length;
-  var tileUrlFunctions = new Array(len);
-
-  for (var i = 0; i < len; ++i) {
-    tileUrlFunctions[i] = createFromTemplate(templates[i], tileGrid);
-  }
-
-  return createFromTileUrlFunctions(tileUrlFunctions);
-}
-/**
- * @param {Array<import("./Tile.js").UrlFunction>} tileUrlFunctions Tile URL Functions.
- * @return {import("./Tile.js").UrlFunction} Tile URL function.
- */
-
-
-function createFromTileUrlFunctions(tileUrlFunctions) {
-  if (tileUrlFunctions.length === 1) {
-    return tileUrlFunctions[0];
-  }
-
-  return (
-    /**
-     * @param {import("./tilecoord.js").TileCoord} tileCoord Tile Coordinate.
-     * @param {number} pixelRatio Pixel ratio.
-     * @param {import("./proj/Projection.js").default} projection Projection.
-     * @return {string|undefined} Tile URL.
-     */
-    function (tileCoord, pixelRatio, projection) {
-      if (!tileCoord) {
-        return undefined;
-      } else {
-        var h = (0, _tilecoord.hash)(tileCoord);
-        var index = (0, _math.modulo)(h, tileUrlFunctions.length);
-        return tileUrlFunctions[index](tileCoord, pixelRatio, projection);
-      }
-    }
-  );
-}
-/**
- * @param {import("./tilecoord.js").TileCoord} tileCoord Tile coordinate.
- * @param {number} pixelRatio Pixel ratio.
- * @param {import("./proj/Projection.js").default} projection Projection.
- * @return {string|undefined} Tile URL.
- */
-
-
-function nullTileUrlFunction(tileCoord, pixelRatio, projection) {
-  return undefined;
-}
-/**
- * @param {string} url URL.
- * @return {Array<string>} Array of urls.
- */
-
-
-function expandUrl(url) {
-  var urls = [];
-  var match = /\{([a-z])-([a-z])\}/.exec(url);
-
-  if (match) {
-    // char range
-    var startCharCode = match[1].charCodeAt(0);
-    var stopCharCode = match[2].charCodeAt(0);
-    var charCode;
-
-    for (charCode = startCharCode; charCode <= stopCharCode; ++charCode) {
-      urls.push(url.replace(match[0], String.fromCharCode(charCode)));
-    }
-
-    return urls;
-  }
-
-  match = match = /\{(\d+)-(\d+)\}/.exec(url);
-
-  if (match) {
-    // number range
-    var stop = parseInt(match[2], 10);
-
-    for (var i = parseInt(match[1], 10); i <= stop; i++) {
-      urls.push(url.replace(match[0], i.toString()));
-    }
-
-    return urls;
-  }
-
-  urls.push(url);
-  return urls;
-} //# sourceMappingURL=tileurlfunction.js.map
-},{"./asserts.js":"hgi2","./math.js":"cgU2","./tilecoord.js":"GpvC"}],"odY2":[function(require,module,exports) {
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.default = void 0;
-
-/**
- * @module ol/source/TileEventType
- */
-
-/**
- * @enum {string}
- */
-var _default = {
-  /**
-   * Triggered when a tile starts loading.
-   * @event module:ol/source/Tile.TileSourceEvent#tileloadstart
-   * @api
-   */
-  TILELOADSTART: 'tileloadstart',
-
-  /**
-   * Triggered when a tile finishes loading, either when its data is loaded,
-   * or when loading was aborted because the tile is no longer needed.
-   * @event module:ol/source/Tile.TileSourceEvent#tileloadend
-   * @api
-   */
-  TILELOADEND: 'tileloadend',
-
-  /**
-   * Triggered if tile loading results in an error.
-   * @event module:ol/source/Tile.TileSourceEvent#tileloaderror
-   * @api
-   */
-  TILELOADERROR: 'tileloaderror'
-}; //# sourceMappingURL=TileEventType.js.map
-
-exports.default = _default;
-},{}],"kKjj":[function(require,module,exports) {
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.default = void 0;
-
-var _util = require("../util.js");
-
-var _TileState = _interopRequireDefault(require("../TileState.js"));
-
-var _tileurlfunction = require("../tileurlfunction.js");
-
-var _Tile = _interopRequireWildcard(require("./Tile.js"));
-
-var _TileEventType = _interopRequireDefault(require("./TileEventType.js"));
-
-var _tilecoord = require("../tilecoord.js");
-
-function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) { var desc = Object.defineProperty && Object.getOwnPropertyDescriptor ? Object.getOwnPropertyDescriptor(obj, key) : {}; if (desc.get || desc.set) { Object.defineProperty(newObj, key, desc); } else { newObj[key] = obj[key]; } } } } newObj.default = obj; return newObj; } }
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/**
- * @module ol/source/UrlTile
- */
-
-/**
- * @typedef {Object} Options
- * @property {import("./Source.js").AttributionLike} [attributions]
- * @property {boolean} [attributionsCollapsible=true] Attributions are collapsible.
- * @property {number} [cacheSize]
- * @property {boolean} [opaque]
- * @property {import("../proj.js").ProjectionLike} [projection]
- * @property {import("./State.js").default} [state]
- * @property {import("../tilegrid/TileGrid.js").default} [tileGrid]
- * @property {import("../Tile.js").LoadFunction} tileLoadFunction
- * @property {number} [tilePixelRatio]
- * @property {import("../Tile.js").UrlFunction} [tileUrlFunction]
- * @property {string} [url]
- * @property {Array<string>} [urls]
- * @property {boolean} [wrapX=true]
- * @property {number} [transition]
- * @property {string} [key]
- */
-
-/**
- * @classdesc
- * Base class for sources providing tiles divided into a tile grid over http.
- *
- * @fires import("./Tile.js").TileSourceEvent
- */
-var UrlTile =
-/*@__PURE__*/
-function (TileSource) {
-  function UrlTile(options) {
-    TileSource.call(this, {
-      attributions: options.attributions,
-      cacheSize: options.cacheSize,
-      opaque: options.opaque,
-      projection: options.projection,
-      state: options.state,
-      tileGrid: options.tileGrid,
-      tilePixelRatio: options.tilePixelRatio,
-      wrapX: options.wrapX,
-      transition: options.transition,
-      key: options.key,
-      attributionsCollapsible: options.attributionsCollapsible
-    });
-    /**
-     * @private
-     * @type {boolean}
-     */
-
-    this.generateTileUrlFunction_ = !options.tileUrlFunction;
-    /**
-     * @protected
-     * @type {import("../Tile.js").LoadFunction}
-     */
-
-    this.tileLoadFunction = options.tileLoadFunction;
-    /**
-     * @protected
-     * @type {import("../Tile.js").UrlFunction}
-     */
-
-    this.tileUrlFunction = options.tileUrlFunction ? options.tileUrlFunction.bind(this) : _tileurlfunction.nullTileUrlFunction;
-    /**
-     * @protected
-     * @type {!Array<string>|null}
-     */
-
-    this.urls = null;
-
-    if (options.urls) {
-      this.setUrls(options.urls);
-    } else if (options.url) {
-      this.setUrl(options.url);
-    }
-
-    if (options.tileUrlFunction) {
-      this.setTileUrlFunction(options.tileUrlFunction, this.key_);
-    }
-    /**
-     * @private
-     * @type {!Object<string, boolean>}
-     */
-
-
-    this.tileLoadingKeys_ = {};
-  }
-
-  if (TileSource) UrlTile.__proto__ = TileSource;
-  UrlTile.prototype = Object.create(TileSource && TileSource.prototype);
-  UrlTile.prototype.constructor = UrlTile;
-  /**
-   * Return the tile load function of the source.
-   * @return {import("../Tile.js").LoadFunction} TileLoadFunction
-   * @api
-   */
-
-  UrlTile.prototype.getTileLoadFunction = function getTileLoadFunction() {
-    return this.tileLoadFunction;
-  };
-  /**
-   * Return the tile URL function of the source.
-   * @return {import("../Tile.js").UrlFunction} TileUrlFunction
-   * @api
-   */
-
-
-  UrlTile.prototype.getTileUrlFunction = function getTileUrlFunction() {
-    return this.tileUrlFunction;
-  };
-  /**
-   * Return the URLs used for this source.
-   * When a tileUrlFunction is used instead of url or urls,
-   * null will be returned.
-   * @return {!Array<string>|null} URLs.
-   * @api
-   */
-
-
-  UrlTile.prototype.getUrls = function getUrls() {
-    return this.urls;
-  };
-  /**
-   * Handle tile change events.
-   * @param {import("../events/Event.js").default} event Event.
-   * @protected
-   */
-
-
-  UrlTile.prototype.handleTileChange = function handleTileChange(event) {
-    var tile =
-    /** @type {import("../Tile.js").default} */
-    event.target;
-    var uid = (0, _util.getUid)(tile);
-    var tileState = tile.getState();
-    var type;
-
-    if (tileState == _TileState.default.LOADING) {
-      this.tileLoadingKeys_[uid] = true;
-      type = _TileEventType.default.TILELOADSTART;
-    } else if (uid in this.tileLoadingKeys_) {
-      delete this.tileLoadingKeys_[uid];
-      type = tileState == _TileState.default.ERROR ? _TileEventType.default.TILELOADERROR : tileState == _TileState.default.LOADED || tileState == _TileState.default.ABORT ? _TileEventType.default.TILELOADEND : undefined;
-    }
-
-    if (type != undefined) {
-      this.dispatchEvent(new _Tile.TileSourceEvent(type, tile));
-    }
-  };
-  /**
-   * Set the tile load function of the source.
-   * @param {import("../Tile.js").LoadFunction} tileLoadFunction Tile load function.
-   * @api
-   */
-
-
-  UrlTile.prototype.setTileLoadFunction = function setTileLoadFunction(tileLoadFunction) {
-    this.tileCache.clear();
-    this.tileLoadFunction = tileLoadFunction;
-    this.changed();
-  };
-  /**
-   * Set the tile URL function of the source.
-   * @param {import("../Tile.js").UrlFunction} tileUrlFunction Tile URL function.
-   * @param {string=} key Optional new tile key for the source.
-   * @api
-   */
-
-
-  UrlTile.prototype.setTileUrlFunction = function setTileUrlFunction(tileUrlFunction, key) {
-    this.tileUrlFunction = tileUrlFunction;
-    this.tileCache.pruneExceptNewestZ();
-
-    if (typeof key !== 'undefined') {
-      this.setKey(key);
-    } else {
-      this.changed();
-    }
-  };
-  /**
-   * Set the URL to use for requests.
-   * @param {string} url URL.
-   * @api
-   */
-
-
-  UrlTile.prototype.setUrl = function setUrl(url) {
-    var urls = this.urls = (0, _tileurlfunction.expandUrl)(url);
-    this.setUrls(urls);
-  };
-  /**
-   * Set the URLs to use for requests.
-   * @param {Array<string>} urls URLs.
-   * @api
-   */
-
-
-  UrlTile.prototype.setUrls = function setUrls(urls) {
-    this.urls = urls;
-    var key = urls.join('\n');
-
-    if (this.generateTileUrlFunction_) {
-      this.setTileUrlFunction((0, _tileurlfunction.createFromTemplates)(urls, this.tileGrid), key);
-    } else {
-      this.setKey(key);
-    }
-  };
-  /**
-   * @inheritDoc
-   */
-
-
-  UrlTile.prototype.useTile = function useTile(z, x, y) {
-    var tileCoordKey = (0, _tilecoord.getKeyZXY)(z, x, y);
-
-    if (this.tileCache.containsKey(tileCoordKey)) {
-      this.tileCache.get(tileCoordKey);
-    }
-  };
-
-  return UrlTile;
-}(_Tile.default);
-
-var _default = UrlTile; //# sourceMappingURL=UrlTile.js.map
-
-exports.default = _default;
-},{"../util.js":"3bmr","../TileState.js":"5TPV","../tileurlfunction.js":"WLnk","./Tile.js":"L7OL","./TileEventType.js":"odY2","../tilecoord.js":"GpvC"}],"Hf9V":[function(require,module,exports) {
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.default = void 0;
-
-var _common = require("../reproj/common.js");
-
-var _util = require("../util.js");
-
-var _ImageTile = _interopRequireDefault(require("../ImageTile.js"));
-
-var _TileCache = _interopRequireDefault(require("../TileCache.js"));
-
-var _TileState = _interopRequireDefault(require("../TileState.js"));
-
-var _events = require("../events.js");
-
-var _EventType = _interopRequireDefault(require("../events/EventType.js"));
-
-var _proj = require("../proj.js");
-
-var _Tile = _interopRequireDefault(require("../reproj/Tile.js"));
-
-var _UrlTile = _interopRequireDefault(require("./UrlTile.js"));
-
-var _tilecoord = require("../tilecoord.js");
-
-var _tilegrid = require("../tilegrid.js");
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/**
- * @module ol/source/TileImage
- */
-
-/**
- * @typedef {Object} Options
- * @property {import("./Source.js").AttributionLike} [attributions] Attributions.
- * @property {boolean} [attributionsCollapsible=true] Attributions are collapsible.
- * @property {number} [cacheSize=2048] Cache size.
- * @property {null|string} [crossOrigin] The `crossOrigin` attribute for loaded images.  Note that
- * you must provide a `crossOrigin` value if you are using the WebGL renderer or if you want to
- * access pixel data with the Canvas renderer.  See
- * https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_enabled_image for more detail.
- * @property {boolean} [opaque=true] Whether the layer is opaque.
- * @property {import("../proj.js").ProjectionLike} projection Projection.
- * @property {number} [reprojectionErrorThreshold=0.5] Maximum allowed reprojection error (in pixels).
- * Higher values can increase reprojection performance, but decrease precision.
- * @property {import("./State.js").default} [state] Source state.
- * @property {typeof import("../ImageTile.js").default} [tileClass] Class used to instantiate image tiles.
- * Default is {@link module:ol/ImageTile~ImageTile}.
- * @property {import("../tilegrid/TileGrid.js").default} [tileGrid] Tile grid.
- * @property {import("../Tile.js").LoadFunction} [tileLoadFunction] Optional function to load a tile given a URL. The default is
- * ```js
- * function(imageTile, src) {
- *   imageTile.getImage().src = src;
- * };
- * ```
- * @property {number} [tilePixelRatio=1] The pixel ratio used by the tile service. For example, if the tile
- * service advertizes 256px by 256px tiles but actually sends 512px
- * by 512px images (for retina/hidpi devices) then `tilePixelRatio`
- * should be set to `2`.
- * @property {import("../Tile.js").UrlFunction} [tileUrlFunction] Optional function to get tile URL given a tile coordinate and the projection.
- * @property {string} [url] URL template. Must include `{x}`, `{y}` or `{-y}`, and `{z}` placeholders.
- * A `{?-?}` template pattern, for example `subdomain{a-f}.domain.com`, may be
- * used instead of defining each one separately in the `urls` option.
- * @property {Array<string>} [urls] An array of URL templates.
- * @property {boolean} [wrapX] Whether to wrap the world horizontally. The default, is to
- * request out-of-bounds tiles from the server. When set to `false`, only one
- * world will be rendered. When set to `true`, tiles will be requested for one
- * world only, but they will be wrapped horizontally to render multiple worlds.
- * @property {number} [transition] Duration of the opacity transition for rendering.
- * To disable the opacity transition, pass `transition: 0`.
- * @property {string} [key] Optional tile key for proper cache fetching
- */
-
-/**
- * @classdesc
- * Base class for sources providing images divided into a tile grid.
- *
- * @fires import("./Tile.js").TileSourceEvent
- * @api
- */
-var TileImage =
-/*@__PURE__*/
-function (UrlTile) {
-  function TileImage(options) {
-    UrlTile.call(this, {
-      attributions: options.attributions,
-      cacheSize: options.cacheSize,
-      opaque: options.opaque,
-      projection: options.projection,
-      state: options.state,
-      tileGrid: options.tileGrid,
-      tileLoadFunction: options.tileLoadFunction ? options.tileLoadFunction : defaultTileLoadFunction,
-      tilePixelRatio: options.tilePixelRatio,
-      tileUrlFunction: options.tileUrlFunction,
-      url: options.url,
-      urls: options.urls,
-      wrapX: options.wrapX,
-      transition: options.transition,
-      key: options.key,
-      attributionsCollapsible: options.attributionsCollapsible
-    });
-    /**
-     * @protected
-     * @type {?string}
-     */
-
-    this.crossOrigin = options.crossOrigin !== undefined ? options.crossOrigin : null;
-    /**
-     * @protected
-     * @type {typeof ImageTile}
-     */
-
-    this.tileClass = options.tileClass !== undefined ? options.tileClass : _ImageTile.default;
-    /**
-     * @protected
-     * @type {!Object<string, TileCache>}
-     */
-
-    this.tileCacheForProjection = {};
-    /**
-     * @protected
-     * @type {!Object<string, import("../tilegrid/TileGrid.js").default>}
-     */
-
-    this.tileGridForProjection = {};
-    /**
-     * @private
-     * @type {number|undefined}
-     */
-
-    this.reprojectionErrorThreshold_ = options.reprojectionErrorThreshold;
-    /**
-     * @private
-     * @type {boolean}
-     */
-
-    this.renderReprojectionEdges_ = false;
-  }
-
-  if (UrlTile) TileImage.__proto__ = UrlTile;
-  TileImage.prototype = Object.create(UrlTile && UrlTile.prototype);
-  TileImage.prototype.constructor = TileImage;
-  /**
-   * @inheritDoc
-   */
-
-  TileImage.prototype.canExpireCache = function canExpireCache() {
-    if (!_common.ENABLE_RASTER_REPROJECTION) {
-      return UrlTile.prototype.canExpireCache.call(this);
-    }
-
-    if (this.tileCache.canExpireCache()) {
-      return true;
-    } else {
-      for (var key in this.tileCacheForProjection) {
-        if (this.tileCacheForProjection[key].canExpireCache()) {
-          return true;
-        }
-      }
-    }
-
-    return false;
-  };
-  /**
-   * @inheritDoc
-   */
-
-
-  TileImage.prototype.expireCache = function expireCache(projection, usedTiles) {
-    if (!_common.ENABLE_RASTER_REPROJECTION) {
-      UrlTile.prototype.expireCache.call(this, projection, usedTiles);
-      return;
-    }
-
-    var usedTileCache = this.getTileCacheForProjection(projection);
-    this.tileCache.expireCache(this.tileCache == usedTileCache ? usedTiles : {});
-
-    for (var id in this.tileCacheForProjection) {
-      var tileCache = this.tileCacheForProjection[id];
-      tileCache.expireCache(tileCache == usedTileCache ? usedTiles : {});
-    }
-  };
-  /**
-   * @inheritDoc
-   */
-
-
-  TileImage.prototype.getGutterForProjection = function getGutterForProjection(projection) {
-    if (_common.ENABLE_RASTER_REPROJECTION && this.getProjection() && projection && !(0, _proj.equivalent)(this.getProjection(), projection)) {
-      return 0;
-    } else {
-      return this.getGutter();
-    }
-  };
-  /**
-   * @return {number} Gutter.
-   */
-
-
-  TileImage.prototype.getGutter = function getGutter() {
-    return 0;
-  };
-  /**
-   * @inheritDoc
-   */
-
-
-  TileImage.prototype.getOpaque = function getOpaque(projection) {
-    if (_common.ENABLE_RASTER_REPROJECTION && this.getProjection() && projection && !(0, _proj.equivalent)(this.getProjection(), projection)) {
-      return false;
-    } else {
-      return UrlTile.prototype.getOpaque.call(this, projection);
-    }
-  };
-  /**
-   * @inheritDoc
-   */
-
-
-  TileImage.prototype.getTileGridForProjection = function getTileGridForProjection$1(projection) {
-    if (!_common.ENABLE_RASTER_REPROJECTION) {
-      return UrlTile.prototype.getTileGridForProjection.call(this, projection);
-    }
-
-    var thisProj = this.getProjection();
-
-    if (this.tileGrid && (!thisProj || (0, _proj.equivalent)(thisProj, projection))) {
-      return this.tileGrid;
-    } else {
-      var projKey = (0, _util.getUid)(projection);
-
-      if (!(projKey in this.tileGridForProjection)) {
-        this.tileGridForProjection[projKey] = (0, _tilegrid.getForProjection)(projection);
-      }
-
-      return (
-        /** @type {!import("../tilegrid/TileGrid.js").default} */
-        this.tileGridForProjection[projKey]
-      );
-    }
-  };
-  /**
-   * @inheritDoc
-   */
-
-
-  TileImage.prototype.getTileCacheForProjection = function getTileCacheForProjection(projection) {
-    if (!_common.ENABLE_RASTER_REPROJECTION) {
-      return UrlTile.prototype.getTileCacheForProjection.call(this, projection);
-    }
-
-    var thisProj = this.getProjection();
-
-    if (!thisProj || (0, _proj.equivalent)(thisProj, projection)) {
-      return this.tileCache;
-    } else {
-      var projKey = (0, _util.getUid)(projection);
-
-      if (!(projKey in this.tileCacheForProjection)) {
-        this.tileCacheForProjection[projKey] = new _TileCache.default(this.tileCache.highWaterMark);
-      }
-
-      return this.tileCacheForProjection[projKey];
-    }
-  };
-  /**
-   * @param {number} z Tile coordinate z.
-   * @param {number} x Tile coordinate x.
-   * @param {number} y Tile coordinate y.
-   * @param {number} pixelRatio Pixel ratio.
-   * @param {import("../proj/Projection.js").default} projection Projection.
-   * @param {string} key The key set on the tile.
-   * @return {!import("../Tile.js").default} Tile.
-   * @private
-   */
-
-
-  TileImage.prototype.createTile_ = function createTile_(z, x, y, pixelRatio, projection, key) {
-    var tileCoord = [z, x, y];
-    var urlTileCoord = this.getTileCoordForTileUrlFunction(tileCoord, projection);
-    var tileUrl = urlTileCoord ? this.tileUrlFunction(urlTileCoord, pixelRatio, projection) : undefined;
-    var tile = new this.tileClass(tileCoord, tileUrl !== undefined ? _TileState.default.IDLE : _TileState.default.EMPTY, tileUrl !== undefined ? tileUrl : '', this.crossOrigin, this.tileLoadFunction, this.tileOptions);
-    tile.key = key;
-    (0, _events.listen)(tile, _EventType.default.CHANGE, this.handleTileChange, this);
-    return tile;
-  };
-  /**
-   * @inheritDoc
-   */
-
-
-  TileImage.prototype.getTile = function getTile(z, x, y, pixelRatio, projection) {
-    var sourceProjection =
-    /** @type {!import("../proj/Projection.js").default} */
-    this.getProjection();
-
-    if (!_common.ENABLE_RASTER_REPROJECTION || !sourceProjection || !projection || (0, _proj.equivalent)(sourceProjection, projection)) {
-      return this.getTileInternal(z, x, y, pixelRatio, sourceProjection || projection);
-    } else {
-      var cache = this.getTileCacheForProjection(projection);
-      var tileCoord = [z, x, y];
-      var tile;
-      var tileCoordKey = (0, _tilecoord.getKey)(tileCoord);
-
-      if (cache.containsKey(tileCoordKey)) {
-        tile =
-        /** @type {!import("../Tile.js").default} */
-        cache.get(tileCoordKey);
-      }
-
-      var key = this.getKey();
-
-      if (tile && tile.key == key) {
-        return tile;
-      } else {
-        var sourceTileGrid = this.getTileGridForProjection(sourceProjection);
-        var targetTileGrid = this.getTileGridForProjection(projection);
-        var wrappedTileCoord = this.getTileCoordForTileUrlFunction(tileCoord, projection);
-        var newTile = new _Tile.default(sourceProjection, sourceTileGrid, projection, targetTileGrid, tileCoord, wrappedTileCoord, this.getTilePixelRatio(pixelRatio), this.getGutter(), function (z, x, y, pixelRatio) {
-          return this.getTileInternal(z, x, y, pixelRatio, sourceProjection);
-        }.bind(this), this.reprojectionErrorThreshold_, this.renderReprojectionEdges_);
-        newTile.key = key;
-
-        if (tile) {
-          newTile.interimTile = tile;
-          newTile.refreshInterimChain();
-          cache.replace(tileCoordKey, newTile);
-        } else {
-          cache.set(tileCoordKey, newTile);
-        }
-
-        return newTile;
-      }
-    }
-  };
-  /**
-   * @param {number} z Tile coordinate z.
-   * @param {number} x Tile coordinate x.
-   * @param {number} y Tile coordinate y.
-   * @param {number} pixelRatio Pixel ratio.
-   * @param {!import("../proj/Projection.js").default} projection Projection.
-   * @return {!import("../Tile.js").default} Tile.
-   * @protected
-   */
-
-
-  TileImage.prototype.getTileInternal = function getTileInternal(z, x, y, pixelRatio, projection) {
-    var tile = null;
-    var tileCoordKey = (0, _tilecoord.getKeyZXY)(z, x, y);
-    var key = this.getKey();
-
-    if (!this.tileCache.containsKey(tileCoordKey)) {
-      tile = this.createTile_(z, x, y, pixelRatio, projection, key);
-      this.tileCache.set(tileCoordKey, tile);
-    } else {
-      tile = this.tileCache.get(tileCoordKey);
-
-      if (tile.key != key) {
-        // The source's params changed. If the tile has an interim tile and if we
-        // can use it then we use it. Otherwise we create a new tile.  In both
-        // cases we attempt to assign an interim tile to the new tile.
-        var interimTile = tile;
-        tile = this.createTile_(z, x, y, pixelRatio, projection, key); //make the new tile the head of the list,
-
-        if (interimTile.getState() == _TileState.default.IDLE) {
-          //the old tile hasn't begun loading yet, and is now outdated, so we can simply discard it
-          tile.interimTile = interimTile.interimTile;
-        } else {
-          tile.interimTile = interimTile;
-        }
-
-        tile.refreshInterimChain();
-        this.tileCache.replace(tileCoordKey, tile);
-      }
-    }
-
-    return tile;
-  };
-  /**
-   * Sets whether to render reprojection edges or not (usually for debugging).
-   * @param {boolean} render Render the edges.
-   * @api
-   */
-
-
-  TileImage.prototype.setRenderReprojectionEdges = function setRenderReprojectionEdges(render) {
-    if (!_common.ENABLE_RASTER_REPROJECTION || this.renderReprojectionEdges_ == render) {
-      return;
-    }
-
-    this.renderReprojectionEdges_ = render;
-
-    for (var id in this.tileCacheForProjection) {
-      this.tileCacheForProjection[id].clear();
-    }
-
-    this.changed();
-  };
-  /**
-   * Sets the tile grid to use when reprojecting the tiles to the given
-   * projection instead of the default tile grid for the projection.
-   *
-   * This can be useful when the default tile grid cannot be created
-   * (e.g. projection has no extent defined) or
-   * for optimization reasons (custom tile size, resolutions, ...).
-   *
-   * @param {import("../proj.js").ProjectionLike} projection Projection.
-   * @param {import("../tilegrid/TileGrid.js").default} tilegrid Tile grid to use for the projection.
-   * @api
-   */
-
-
-  TileImage.prototype.setTileGridForProjection = function setTileGridForProjection(projection, tilegrid) {
-    if (_common.ENABLE_RASTER_REPROJECTION) {
-      var proj = (0, _proj.get)(projection);
-
-      if (proj) {
-        var projKey = (0, _util.getUid)(proj);
-
-        if (!(projKey in this.tileGridForProjection)) {
-          this.tileGridForProjection[projKey] = tilegrid;
-        }
-      }
-    }
-  };
-
-  return TileImage;
-}(_UrlTile.default);
-/**
- * @param {ImageTile} imageTile Image tile.
- * @param {string} src Source.
- */
-
-
-function defaultTileLoadFunction(imageTile, src) {
-  /** @type {HTMLImageElement|HTMLVideoElement} */
-  imageTile.getImage().src = src;
-}
-
-var _default = TileImage; //# sourceMappingURL=TileImage.js.map
-
-exports.default = _default;
-},{"../reproj/common.js":"s+12","../util.js":"3bmr","../ImageTile.js":"tPcm","../TileCache.js":"g4cv","../TileState.js":"5TPV","../events.js":"E9xa","../events/EventType.js":"lUmy","../proj.js":"bkYg","../reproj/Tile.js":"PSAO","./UrlTile.js":"kKjj","../tilecoord.js":"GpvC","../tilegrid.js":"zlz6"}],"4e4W":[function(require,module,exports) {
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.default = void 0;
-
-var _TileImage = _interopRequireDefault(require("./TileImage.js"));
-
-var _tilegrid = require("../tilegrid.js");
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/**
- * @module ol/source/XYZ
- */
-
-/**
- * @typedef {Object} Options
- * @property {import("./Source.js").AttributionLike} [attributions] Attributions.
- * @property {boolean} [attributionsCollapsible=true] Attributions are collapsible.
- * @property {number} [cacheSize=2048] Cache size.
- * @property {null|string} [crossOrigin] The `crossOrigin` attribute for loaded images.  Note that
- * you must provide a `crossOrigin` value if you are using the WebGL renderer or if you want to
- * access pixel data with the Canvas renderer.  See
- * https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_enabled_image for more detail.
- * @property {boolean} [opaque=true] Whether the layer is opaque.
- * @property {import("../proj.js").ProjectionLike} [projection='EPSG:3857'] Projection.
- * @property {number} [reprojectionErrorThreshold=0.5] Maximum allowed reprojection error (in pixels).
- * Higher values can increase reprojection performance, but decrease precision.
- * @property {number} [maxZoom=18] Optional max zoom level.
- * @property {number} [minZoom=0] Optional min zoom level.
- * @property {import("../tilegrid/TileGrid.js").default} [tileGrid] Tile grid.
- * @property {import("../Tile.js").LoadFunction} [tileLoadFunction] Optional function to load a tile given a URL. The default is
- * ```js
- * function(imageTile, src) {
- *   imageTile.getImage().src = src;
- * };
- * ```
- * @property {number} [tilePixelRatio=1] The pixel ratio used by the tile service.
- * For example, if the tile service advertizes 256px by 256px tiles but actually sends 512px
- * by 512px images (for retina/hidpi devices) then `tilePixelRatio`
- * should be set to `2`.
- * @property {number|import("../size.js").Size} [tileSize=[256, 256]] The tile size used by the tile service.
- * @property {import("../Tile.js").UrlFunction} [tileUrlFunction] Optional function to get
- * tile URL given a tile coordinate and the projection.
- * Required if url or urls are not provided.
- * @property {string} [url] URL template. Must include `{x}`, `{y}` or `{-y}`,
- * and `{z}` placeholders. A `{?-?}` template pattern, for example `subdomain{a-f}.domain.com`,
- * may be used instead of defining each one separately in the `urls` option.
- * @property {Array<string>} [urls] An array of URL templates.
- * @property {boolean} [wrapX=true] Whether to wrap the world horizontally.
- * @property {number} [transition] Duration of the opacity transition for rendering.
- * To disable the opacity transition, pass `transition: 0`.
- */
-
-/**
- * @classdesc
- * Layer source for tile data with URLs in a set XYZ format that are
- * defined in a URL template. By default, this follows the widely-used
- * Google grid where `x` 0 and `y` 0 are in the top left. Grids like
- * TMS where `x` 0 and `y` 0 are in the bottom left can be used by
- * using the `{-y}` placeholder in the URL template, so long as the
- * source does not have a custom tile grid. In this case,
- * {@link module:ol/source/TileImage} can be used with a `tileUrlFunction`
- * such as:
- *
- *  tileUrlFunction: function(coordinate) {
- *    return 'http://mapserver.com/' + coordinate[0] + '/' +
- *        coordinate[1] + '/' + coordinate[2] + '.png';
- *    }
- *
- * @api
- */
-var XYZ =
-/*@__PURE__*/
-function (TileImage) {
-  function XYZ(opt_options) {
-    var options = opt_options || {};
-    var projection = options.projection !== undefined ? options.projection : 'EPSG:3857';
-    var tileGrid = options.tileGrid !== undefined ? options.tileGrid : (0, _tilegrid.createXYZ)({
-      extent: (0, _tilegrid.extentFromProjection)(projection),
-      maxZoom: options.maxZoom,
-      minZoom: options.minZoom,
-      tileSize: options.tileSize
-    });
-    TileImage.call(this, {
-      attributions: options.attributions,
-      cacheSize: options.cacheSize,
-      crossOrigin: options.crossOrigin,
-      opaque: options.opaque,
-      projection: projection,
-      reprojectionErrorThreshold: options.reprojectionErrorThreshold,
-      tileGrid: tileGrid,
-      tileLoadFunction: options.tileLoadFunction,
-      tilePixelRatio: options.tilePixelRatio,
-      tileUrlFunction: options.tileUrlFunction,
-      url: options.url,
-      urls: options.urls,
-      wrapX: options.wrapX !== undefined ? options.wrapX : true,
-      transition: options.transition,
-      attributionsCollapsible: options.attributionsCollapsible
-    });
-  }
-
-  if (TileImage) XYZ.__proto__ = TileImage;
-  XYZ.prototype = Object.create(TileImage && TileImage.prototype);
-  XYZ.prototype.constructor = XYZ;
-  return XYZ;
-}(_TileImage.default);
-
-var _default = XYZ; //# sourceMappingURL=XYZ.js.map
-
-exports.default = _default;
-},{"./TileImage.js":"Hf9V","../tilegrid.js":"zlz6"}],"pFtY":[function(require,module,exports) {
-"use strict";
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.default = exports.ATTRIBUTION = void 0;
-
-var _XYZ = _interopRequireDefault(require("./XYZ.js"));
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/**
- * @module ol/source/OSM
- */
-
-/**
- * The attribution containing a link to the OpenStreetMap Copyright and License
- * page.
- * @const
- * @type {string}
- * @api
- */
-var ATTRIBUTION = '&#169; ' + '<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ' + 'contributors.';
-/**
- * @typedef {Object} Options
- * @property {import("./Source.js").AttributionLike} [attributions] Attributions.
- * @property {number} [cacheSize=2048] Cache size.
- * @property {null|string} [crossOrigin] The `crossOrigin` attribute for loaded images.  Note that
- * you must provide a `crossOrigin` value if you are using the WebGL renderer or if you want to
- * access pixel data with the Canvas renderer.  See
- * https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_enabled_image for more detail.
- * @property {number} [maxZoom=19] Max zoom.
- * @property {boolean} [opaque=true] Whether the layer is opaque.
- * @property {number} [reprojectionErrorThreshold=1.5] Maximum allowed reprojection error (in pixels).
- * Higher values can increase reprojection performance, but decrease precision.
- * @property {import("../Tile.js").LoadFunction} [tileLoadFunction] Optional function to load a tile given a URL. The default is
- * ```js
- * function(imageTile, src) {
- *   imageTile.getImage().src = src;
- * };
- * ```
- * @property {string} [url='https://{a-c}.tile.openstreetmap.org/{z}/{x}/{y}.png'] URL template.
- * Must include `{x}`, `{y}` or `{-y}`, and `{z}` placeholders.
- * @property {boolean} [wrapX=true] Whether to wrap the world horizontally.
- */
-
-/**
- * @classdesc
- * Layer source for the OpenStreetMap tile server.
- * @api
- */
-
-exports.ATTRIBUTION = ATTRIBUTION;
-
-var OSM =
-/*@__PURE__*/
-function (XYZ) {
-  function OSM(opt_options) {
-    var options = opt_options || {};
-    var attributions;
-
-    if (options.attributions !== undefined) {
-      attributions = options.attributions;
-    } else {
-      attributions = [ATTRIBUTION];
-    }
-
-    var crossOrigin = options.crossOrigin !== undefined ? options.crossOrigin : 'anonymous';
-    var url = options.url !== undefined ? options.url : 'https://{a-c}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    XYZ.call(this, {
-      attributions: attributions,
-      cacheSize: options.cacheSize,
-      crossOrigin: crossOrigin,
-      opaque: options.opaque !== undefined ? options.opaque : true,
-      maxZoom: options.maxZoom !== undefined ? options.maxZoom : 19,
-      reprojectionErrorThreshold: options.reprojectionErrorThreshold,
-      tileLoadFunction: options.tileLoadFunction,
-      url: url,
-      wrapX: options.wrapX,
-      attributionsCollapsible: false
-    });
-  }
-
-  if (XYZ) OSM.__proto__ = XYZ;
-  OSM.prototype = Object.create(XYZ && XYZ.prototype);
-  OSM.prototype.constructor = OSM;
-  return OSM;
-}(_XYZ.default);
-
-var _default = OSM; //# sourceMappingURL=OSM.js.map
-
-exports.default = _default;
-},{"./XYZ.js":"4e4W"}],"BjXR":[function(require,module,exports) {
+},{"ol":"LDxD","ol/format/GeoJSON":"Xkfr","ol/source/Vector":"s9D1","swagger-client":"NEID","../../../_data/taskmgr_spec_slim":"oy1V"}],"6HCp":[function(require,module,exports) {
 "use strict";
 
 var _ol = require("ol");
 
+var _layers = _interopRequireDefault(require("../layers"));
+
 var _Vector = _interopRequireDefault(require("ol/layer/Vector"));
 
-var _Tile = _interopRequireDefault(require("ol/layer/Tile"));
-
-var _Image = _interopRequireDefault(require("ol/layer/Image"));
-
-var _Vector2 = _interopRequireDefault(require("ol/source/Vector"));
-
-var _ol_source_taskMgr = _interopRequireDefault(require("./ol_source_taskMgr"));
-
-var _XYZ = _interopRequireDefault(require("ol/source/XYZ"));
-
-var _OSM = _interopRequireDefault(require("ol/source/OSM"));
-
-var _GeoJSON = _interopRequireDefault(require("ol/format/GeoJSON"));
-
-var _Fill = _interopRequireDefault(require("ol/style/Fill"));
-
-var _Style = _interopRequireDefault(require("ol/style/Style"));
+var _TaskMgr = _interopRequireDefault(require("../source/TaskMgr"));
 
 var _control = require("ol/control");
 
@@ -84899,52 +84949,18 @@ var _Select = _interopRequireDefault(require("ol/interaction/Select"));
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 // layers
-// sources
-// formats
-// style
 // controls & interactions
-function mapSwazi_map(target, projects) {
+function overview_map(target, projects) {
   this.bounds = [3427637.922163467, -3163184.323967456, 3577228.0000320906, -2964196.586792509];
-  this.projects = projects; // Layers
+  this.projects = projects; // build taskmgr
 
-  var adm0 = new _Vector2.default({
-    url: '/assets/data/adm0_eSwatini.geojson',
-    format: new _GeoJSON.default()
-  });
-  var lyrs = {
-    hotosm: new _Tile.default({
-      source: new _XYZ.default({
-        url: "https://{a-c}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
-      })
-    }),
-    bounds_clip: new _Vector.default({
-      source: adm0,
-      renderMode: 'image',
-      style: new _Style.default({
-        fill: new _Fill.default({
-          color: 'white'
-        })
-      })
-    }),
-    swazi_bounds: new _Vector.default({
-      source: adm0
-    }),
-    taskmgr: new _Vector.default({
-      source: new _ol_source_taskMgr.default({
-        projects: projects
-      })
+  var taskMgr = new _Vector.default({
+    source: new _TaskMgr.default({
+      projects: projects
     })
-  }; // https://gis.stackexchange.com/questions/185881/clipping-tilelayer-with-georeferenced-polygon-clipping-mask/239136
-
-  lyrs['bounds_clip'].on('precompose', function (e) {
-    e.context.globalCompositeOperation = 'destination-in';
   });
-  lyrs['bounds_clip'].on('postcompose', function (e) {
-    e.context.globalCompositeOperation = 'source-over';
-  }); // event listeners
-
   var self = this;
-  lyrs['taskmgr'].getSource().addEventListener('projects_loaded', function (e) {
+  taskMgr.getSource().addEventListener('projects_loaded', function (e) {
     self.dispatchEvent({
       type: 'projects_loaded'
     });
@@ -84952,7 +84968,7 @@ function mapSwazi_map(target, projects) {
 
   var call_opts = {
     target: target,
-    layers: [lyrs.hotosm, lyrs.swazi_bounds, lyrs.taskmgr, lyrs.bounds_clip],
+    layers: [_layers.default.hotosm, _layers.default.swazi_bounds, taskMgr, _layers.default.bounds_clip],
     view: this.get_fitted_view(target, this.bounds),
     interactions: (0, _interaction.defaults)(),
     controls: (0, _control.defaults)()
@@ -84962,9 +84978,9 @@ function mapSwazi_map(target, projects) {
 }
 
 ;
-(0, _ol.inherits)(mapSwazi_map, _ol.Map);
+(0, _ol.inherits)(overview_map, _ol.Map);
 
-mapSwazi_map.prototype.get_fitted_view = function (target, bounds) {
+overview_map.prototype.get_fitted_view = function (target, bounds) {
   var padding = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 10;
   var view = new _ol.View({
     extent: bounds
@@ -84978,11 +84994,11 @@ mapSwazi_map.prototype.get_fitted_view = function (target, bounds) {
   return view;
 };
 
-module.exports = mapSwazi_map;
-},{"ol":"LDxD","ol/layer/Vector":"BGzd","ol/layer/Tile":"tAJs","ol/layer/Image":"cgpj","ol/source/Vector":"s9D1","./ol_source_taskMgr":"0zjt","ol/source/XYZ":"4e4W","ol/source/OSM":"pFtY","ol/format/GeoJSON":"Xkfr","ol/style/Fill":"wPtA","ol/style/Style":"ERCw","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"/vRa":[function(require,module,exports) {
+module.exports = overview_map;
+},{"ol":"LDxD","../layers":"QN0b","ol/layer/Vector":"BGzd","../source/TaskMgr":"Z3Lv","ol/control":"L9cz","ol/interaction":"F9gD","ol/interaction/Select":"NbMs"}],"/vRa":[function(require,module,exports) {
 "use strict";
 
-var _mapSwazi_map = _interopRequireDefault(require("./mapSwazi_map"));
+var _overview = _interopRequireDefault(require("./map/overview"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -84991,10 +85007,10 @@ document.addEventListener("DOMContentLoaded", function () {
   // Projects map
   //
   document.querySelectorAll("#projects-map").forEach(function (pm) {
-    window.mapSwazi_map = new _mapSwazi_map.default(pm, [6209]);
-    window.mapSwazi_map.addEventListener('projects_loaded', function () {
+    window.overview_map = new _overview.default(pm, []);
+    window.overview_map.addEventListener('projects_loaded', function () {
       console.log("PROJECTS ALL LOADED SKO BUFFS");
     });
   });
 });
-},{"./mapSwazi_map":"BjXR"}]},{},["/vRa"], null)
+},{"./map/overview":"6HCp"}]},{},["/vRa"], null)

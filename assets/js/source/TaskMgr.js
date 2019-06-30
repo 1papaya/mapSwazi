@@ -5,7 +5,7 @@ import ol_source_Vector from 'ol/source/Vector';
 
 // Swagger
 import Swagger from 'swagger-client';
-import taskMgr_api_spec from './taskmgr_spec_slim';
+import taskMgr_api_spec from '../../../_data/taskmgr_spec_slim';
 
 var ol_source_taskMgr = function(opts) {
     this.projects = opts.projects || [];
@@ -15,8 +15,6 @@ var ol_source_taskMgr = function(opts) {
     this.api = Swagger({
         spec: taskMgr_api_spec
     }).client;
-
-    window.swag = this.api;
 
     ol_source_Vector.call(this, opts);
 };

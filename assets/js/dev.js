@@ -1,4 +1,4 @@
-import mapSwazi_map from "./mapSwazi_map";
+import overview_map from "./map/overview";
 
 document.addEventListener("DOMContentLoaded", function() {
 
@@ -8,9 +8,9 @@ document.addEventListener("DOMContentLoaded", function() {
 
     document.querySelectorAll("#projects-map").forEach(function(pm) {
 
-        window.mapSwazi_map = new mapSwazi_map(pm, [6209]);
+        window.overview_map = new overview_map(pm, []);
 
-        window.mapSwazi_map.addEventListener('projects_loaded', function() {
+        window.overview_map.addEventListener('projects_loaded', function() {
             console.log("PROJECTS ALL LOADED SKO BUFFS");
         });
     });
