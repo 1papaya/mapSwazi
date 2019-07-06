@@ -25,6 +25,8 @@ collections:
     output: false
   news:
     output: true
+  instructions:
+    output: true
 
 exclude:
   - assets/js/dev.js
@@ -43,6 +45,12 @@ defaults:
     scope:
       path: ""
       type: "news"
+    values:
+      layout: "default"
+  -
+    scope:
+      path: ""
+      type: "instructions"
     values:
       layout: "default"
 
