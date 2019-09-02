@@ -14,7 +14,6 @@ document.addEventListener("DOMContentLoaded", function() {
         var o_map = new overview_map(om, projs);
 
         o_map.addEventListener('projects_loaded', function() {
-            console.log("PROJECTS ALL LOADED SKO BUFFS");
         });
 
         window.overview_maps.push(o_map);

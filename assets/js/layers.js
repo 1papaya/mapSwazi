@@ -19,7 +19,7 @@ import Style from 'ol/style/Style';
 
 // Layers
 var adm0 = new VectorSource({
-    url: '/assets/data/adm0_eSwatini.geojson',
+    url: '/mapSwazi/assets/data/adm0_eSwatini.geojson',
     format: new GeoJSON()
 });
 
