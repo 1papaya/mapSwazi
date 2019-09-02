@@ -16,9 +16,6 @@ exclude:
   - .cache
   - node_modules
 
-plugins:
-  - jekyll-menus
-
 collections:
   supporters:
     output: false
