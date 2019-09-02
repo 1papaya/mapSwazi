@@ -1,2 +1,2 @@
 # #mapSwazi Homepage
-https://1papaya.github.com/mapSwazi
+https://1papaya.github.io/mapSwazi
