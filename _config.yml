@@ -52,7 +52,7 @@ defaults:
       path: ""
       type: "instructions"
     values:
-      layout: "default"
+      layout: "instruction"
 
 # Build settings
 Markdown: kramdown

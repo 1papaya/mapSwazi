@@ -3,7 +3,7 @@ import {View, inherits} from 'ol';
 function SwaziView(target, padding=10) {
 
     const bounds = [3427637.922163467, -3163184.323967456,
-                   3577228.0000320906, -2964196.586792509];
+                    3577228.0000320906, -2964196.586792509];
 
     View.call(this, {
         extent: bounds

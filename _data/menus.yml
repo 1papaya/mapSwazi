@@ -4,12 +4,6 @@ header:
     title: Home
   - url: /projects
     title: Projects
-  - url: /instructions
-    title: Instructions
   - url: /about
     title: About
-
-footer:
-  - url: /contact
-    title: contact us
 ---
