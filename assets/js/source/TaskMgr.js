@@ -29,7 +29,7 @@ ol_source_taskMgr.prototype._loader = function(extent, resolution, projection) {
     for (const proj of this.projects) {
         var self = this;
 
-        this.api.apis.mapping.get_api_v1_project__project_id_({
+        this.api.apis.mapping.get_api_v2_projects__project_id_({
             "as_file": false,
             "abbreviated": false,
             "project_id": proj,

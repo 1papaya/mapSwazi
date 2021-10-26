@@ -199,10 +199,10 @@
     "title": "HOT Tasking Manager API",
     "version": "0.0.1"
   },
-    "host": "tasks.hotosm.org",
+    "host": "tasking-manager-tm4-production-api.hotosm.org",
     "schemes": ["https", "http"],
   "paths": {
-    "/api/v1/project/{project_id}": {
+    "/api/v2/projects/{project_id}": {
       "get": {
         "description": "",
         "parameters": [
@@ -260,7 +260,7 @@
         ]
       }
     },
-    "/api/v1/project/{project_id}/aoi": {
+    "/api/v2/projects/{project_id}/aoi": {
       "get": {
         "description": "",
         "parameters": [
@@ -303,7 +303,7 @@
         ]
       }
     },
-    "/api/v1/project/{project_id}/summary": {
+    "/api/v2/projects/{project_id}/summary": {
       "get": {
         "description": "",
         "parameters": [
@@ -344,7 +344,7 @@
         ]
       }
     },
-    "/api/v1/project/{project_id}/tasks": {
+    "/api/v2/projects/{project_id}/tasks": {
       "get": {
         "description": "",
         "parameters": [
@@ -387,7 +387,7 @@
         ]
       }
     },
-    "/api/v1/project/{project_id}/tasks-as-osm-xml": {
+    "/api/v2/projects/{project_id}/tasks-as-osm-xml": {
       "get": {
         "description": "",
         "parameters": [
@@ -437,7 +437,7 @@
         ]
       }
     },
-    "/api/v1/project/{project_id}/tasks_as_gpx": {
+    "/api/v2/projects/{project_id}/tasks_as_gpx": {
       "get": {
         "description": "",
         "parameters": [
@@ -487,7 +487,7 @@
         ]
       }
     },
-    "/api/v1/stats/project/{project_id}": {
+    "/api/v2/stats/projects/{project_id}": {
       "get": {
         "description": "",
         "parameters": [
@@ -527,7 +527,7 @@
         ]
       }
     },
-    "/api/v1/stats/project/{project_id}/activity": {
+    "/api/v2/stats/projects/{project_id}/activity": {
       "get": {
         "description": "",
         "parameters": [
@@ -565,7 +565,7 @@
         ]
       }
     },
-    "/api/v1/stats/project/{project_id}/contributions": {
+    "/api/v2/stats/projects/{project_id}/contributions": {
       "get": {
         "description": "",
         "parameters": [
